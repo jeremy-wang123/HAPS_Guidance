@@ -34,4 +34,129 @@ ylim(yl)
 set(h,'AutoScaleFactor',1)
 axis equal
 
-% test
+%% Sinusoidal plot of tidal amplitude 14 day time series 
+addpath('/Users/jeremywang/Documents/MATLAB/CATS2008') 
+Model = '/Users/jeremywang/Documents/MATLAB/CATS2008/Model_CATS2008'; 
+
+% use lat and lon for the Thwaites Glacier
+% We can switch to the polar coordinates later
+latlim = [-76.0 -74.5];
+lonlim = [-108 -103];
+
+% specific coordinate choice 
+lat = -75;
+lon = -105; 
+
+% 14-day time vector, hourly
+t0 = datenum(2026,1,1,0,0,0);
+time=t0+(0:(31*24))/24;
+
+[z, constit] = tmd_tide_pred(Model, time, lat, lon, 'z');
+
+figure;
+plot(time - t0, z, 'b', 'LineWidth',1);
+grid on;
+xlabel('Time, days since 2026');
+ylabel('Tidal height');
+caxis(clim)
+
+
+% now plot each of the constit contributions
+constit = strtrim(cellstr(constit));
+figure;
+
+for i  =1:length(constit)
+    zi = tmd_tide_pred(Model, time, lat, lon, 'z', i);
+    
+    subplot(5,2,i)
+    plot(time - t0, zi, 'LineWidth', 1, 'DisplayName', constit{i})
+    title(constit{i})
+    xlabel('Time, days since 2026');
+    ylabel('Tidal height');
+end
+
+%% K1 + O1 amplitude map from CATS2008 near Thwaites
+
+addpath('/Users/jeremywang/Documents/MATLAB/CATS2008')
+Model = '/Users/jeremywang/Documents/MATLAB/CATS2008/Model_CATS2008';
+
+% Thwaites region
+latrange = -78.0:0.02:-73;
+lonrange = -111:0.02:-99;
+
+[lon,lat] = meshgrid(lonrange,latrange);
+
+% Check constituent list
+[~,~,~,conList] = tmd_extract_HC(Model,lat(1),lon(1),'z');
+conList_clean = lower(strtrim(cellstr(conList)));
+
+idx_k1 = find(strcmp(conList_clean,'k1'));
+idx_o1 = find(strcmp(conList_clean,'o1'));
+
+% Extract harmonic amplitudes
+[K1_amp,~,~,~] = tmd_extract_HC(Model,lat,lon,'z',idx_k1);
+[O1_amp,~,~,~] = tmd_extract_HC(Model,lat,lon,'z',idx_o1);
+
+% Combined diurnal amplitude
+KO_amp = K1_amp + O1_amp;
+
+
+% Convert CATS lon/lat grid to polar stereographic x/y used by CATS
+[x,y] = ll2ps(lat,lon);
+
+
+figure
+% ice speed plot
+ax1 = axes;
+mapzoomps('Thwaites Glacier')
+measuresps('speed','log')
+hold on
+measuresps('gl','k')
+
+axis(ax1,'equal')
+axis(ax1,'manual')
+
+xl = xlim(ax1);
+yl = ylim(ax1);
+
+colormap(ax1, parula)
+cb1 = colorbar(ax1,'westoutside');
+ylabel(cb1,'Ice speed (m/yr)')
+
+% tidal amplitude plot
+ax2 = axes;
+
+pcolor(ax2, x, y, KO_amp)
+shading(ax2,'interp')
+set(findobj(ax2,'Type','Surface'), ...
+    'FaceAlpha',0.5, ...
+    'EdgeColor','none')
+
+colormap(ax2, turbo)
+cb2 = colorbar(ax2,'eastoutside');
+ylabel(cb2,'K1 + O1 amplitude (m)')
+
+% Match axes exactly
+set(ax2, ...
+    'Position', ax1.Position, ...
+    'Color','none', ...
+    'XLim', xl, ...
+    'YLim', yl, ...
+    'DataAspectRatio', ax1.DataAspectRatio, ...
+    'PlotBoxAspectRatio', ax1.PlotBoxAspectRatio, ...
+    'XTick', [], ...
+    'YTick', [], ...
+    'Box','off')
+
+linkaxes([ax1 ax2],'xy')
+
+% Put ice-speed axes visually underneath
+uistack(ax1,'bottom')
+
+title(ax1,'CATS2008 K1 + O1 tidal amplitude over ice surface speed')
+
+%% Now recreate figure 1; K1 and O1 for all Antarctica
+
+
+%% Using the interpolation data, we can find the period
+% for each day of 14 days, we can find the max amplitude and plot that
