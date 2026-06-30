@@ -81,8 +81,8 @@ addpath('/Users/jeremywang/Documents/MATLAB/CATS2008')
 Model = '/Users/jeremywang/Documents/MATLAB/CATS2008/Model_CATS2008';
 
 % Thwaites region
-latrange = -76.0:0.02:-74.5;
-lonrange = -108:0.02:-103;
+latrange = -78.0:0.02:-73;
+lonrange = -111:0.02:-99;
 
 [lon,lat] = meshgrid(lonrange,latrange);
 
@@ -104,51 +104,241 @@ KO_amp = K1_amp + O1_amp;
 % Convert CATS lon/lat grid to polar stereographic x/y used by CATS
 [x,y] = ll2ps(lat,lon);
 
-figure;
-mapzoomps('Thwaites Glacier')
-measuresps('speed','log', 'alpha', 0.5)
-hold on;
 
-% Overlay K1+O1 amplitude
-h = pcolor(x, y, KO_amp);
-shading interp
-
-% Make the tidal overlay semi-transparent
-set(h, 'FaceAlpha', 1)
-set(h, 'EdgeColor', 'none')
-
-
-cb = colorbar;
-ylabel(cb,'K1 + O1 amplitude (m)')
-
-title('CATS2008 K1 + O1 tidal amplitude over ice surface speed')
-%% Overlaying with two colors
-figure;
+figure
+% ice speed plot
 ax1 = axes;
 mapzoomps('Thwaites Glacier')
 measuresps('speed','log')
+measuresps('gl', 'k')
+hold on
+
+axis(ax1,'equal')
+axis(ax1,'manual')
+
+xl = xlim(ax1);
+yl = ylim(ax1);
+
 colormap(ax1, parula)
 cb1 = colorbar(ax1,'westoutside');
 ylabel(cb1,'Ice speed (m/yr)')
 
+% tidal amplitude plot
+ax2 = axes;
 
-ax2 = axes('Position',ax1.Position,...
-           'Color','none',...
-           'XLim',ax1.XLim,...
-           'YLim',ax1.YLim,...
-           'Visible','off');
+pcolor(ax2, x, y, KO_amp)
+shading(ax2,'interp')
+set(findobj(ax2,'Type','Surface'), ...
+    'FaceAlpha',0.5, ...
+    'EdgeColor','none')
+
+colormap(ax2, turbo)
+cb2 = colorbar(ax2,'eastoutside');
+ylabel(cb2,'K1 + O1 amplitude (m)')
+
+% Match axes exactly
+set(ax2, ...
+    'Position', ax1.Position, ...
+    'Color','none', ...
+    'XLim', xl, ...
+    'YLim', yl, ...
+    'DataAspectRatio', ax1.DataAspectRatio, ...
+    'PlotBoxAspectRatio', ax1.PlotBoxAspectRatio, ...
+    'XTick', [], ...
+    'YTick', [], ...
+    'Box','off')
+
+linkaxes([ax1 ax2],'xy')
+
+% Put ice-speed axes visually underneath
+uistack(ax1,'bottom')
+
+title(ax1,'CATS2008 K1 + O1 tidal amplitude over ice surface speed')
+
+%% Now recreate figure 1; K1 and O1 for all Antarctica
+clear;clc;
+
+addpath('/Users/jeremywang/Documents/MATLAB/CATS2008')
+Model = '/Users/jeremywang/Documents/MATLAB/CATS2008/Model_CATS2008';
+
+% Thwaites region
+latrange = -90.0:0.2:-60;
+lonrange = -180:0.2:180;
+
+[lon,lat] = meshgrid(lonrange,latrange);
+
+% Check constituent list
+[~,~,~,conList] = tmd_extract_HC(Model,lat(1),lon(1),'z');
+conList_clean = lower(strtrim(cellstr(conList)));
+
+idx_k1 = find(strcmp(conList_clean,'k1'));
+idx_o1 = find(strcmp(conList_clean,'o1'));
+
+% Extract harmonic amplitudes
+[K1_amp,~,~,~] = tmd_extract_HC(Model,lat,lon,'z',idx_k1);
+[O1_amp,~,~,~] = tmd_extract_HC(Model,lat,lon,'z',idx_o1);
+
+% Combined diurnal amplitude
+KO_amp = K1_amp + O1_amp;
+
+
+% Convert CATS lon/lat grid to polar stereographic x/y used by CATS
+[x,y] = ll2ps(lat,lon);
+
+
+figure
+% ice speed plot
+ax1 = axes;
+measuresps('speed', 'log')
+hold on
+measuresps('gl','k')
+
+axis(ax1,'equal')
+axis(ax1,'manual')
+
+xl = xlim(ax1);
+yl = ylim(ax1);
+
+colormap(ax1, parula)
+cb1 = colorbar(ax1,'westoutside');
+ylabel(cb1,'Ice speed (m/yr)')
+
+% tidal amplitude plot
+ax2 = axes;
+
+pcolor(ax2, x, y, KO_amp)
+shading(ax2,'interp')
+set(findobj(ax2,'Type','Surface'), ...
+    'FaceAlpha',0.5, ...
+    'EdgeColor','none')
+
+colormap(ax2, turbo)
+cb2 = colorbar(ax2,'eastoutside');
+ylabel(cb2,'K1 + O1 amplitude (m)')
+
+% Match axes exactly
+set(ax2, ...
+    'Position', ax1.Position, ...
+    'Color','none', ...
+    'XLim', xl, ...
+    'YLim', yl, ...
+    'DataAspectRatio', ax1.DataAspectRatio, ...
+    'PlotBoxAspectRatio', ax1.PlotBoxAspectRatio, ...
+    'XTick', [], ...
+    'YTick', [], ...
+    'Box','off')
+
+linkaxes([ax1 ax2],'xy')
+
+% Put ice-speed axes visually underneath
+uistack(ax1,'bottom')
+
+title(ax1,'CATS2008 K1 + O1 tidal amplitude over ice surface speed')
+
+%% Let's try using GPS coordinates
+clear; clc;
+
+addpath('/Users/jeremywang/Documents/MATLAB/CATS2008')
+Model = '/Users/jeremywang/Documents/MATLAB/CATS2008/Model_CATS2008';
+
+% Thwaites region
+latrange = -90.0:0.2:-60;
+lonrange = -180:0.2:180;
+
+[lon,lat] = meshgrid(lonrange,latrange);
+
+% Check constituent list
+[~,~,~,conList] = tmd_extract_HC(Model,lat(1),lon(1),'z');
+conList_clean = lower(strtrim(cellstr(conList)));
+
+idx_k1 = find(strcmp(conList_clean,'k1'));
+idx_o1 = find(strcmp(conList_clean,'o1'));
+
+% Extract harmonic amplitudes
+[K1_amp,~,~,~] = tmd_extract_HC(Model,lat,lon,'z',idx_k1);
+[O1_amp,~,~,~] = tmd_extract_HC(Model,lat,lon,'z',idx_o1);
+
+% Combined diurnal amplitude
+KO_amp = K1_amp + O1_amp;
+
+figure
+
+% plotting ice speed and grounding line
+ax1 = axes;
+
+measures('speed')
+hold(ax1,'on')
+measures('gl')
+
+% colormap(ax1, parula)
+% 
+% cb1 = colorbar(ax1,'westoutside');
+% ylabel(cb1,'Ice speed (m/yr)')
+
+axis(ax1,'tight')
+
+% Save limits
+xl = xlim(ax1);
+yl = ylim(ax1);
+
+%%------------------ Second axes: CATS amplitude ------------------%%
+ax2 = axes;
 
 hold(ax2,'on')
 
-h = pcolor(ax2,x,y,KO_amp);
+h = pcolor(ax2, lon, lat, KO_amp);
 shading(ax2,'interp')
-set(h,'FaceAlpha',0.5,'EdgeColor','none')
+set(h,'FaceAlpha',0.5)
+set(h,'EdgeColor','none')
 
-colormap(ax2,turbo)
-cb2 = colorbar(ax2,'eastoutside');
-ylabel(cb2,'K1+O1 amplitude (m)')
+colormap(ax2, parula)
 
-linkaxes([ax1 ax2])
+cb2 = colorbar(ax2,'westoutside');
+ylabel(cb2,'K1 + O1 amplitude (m)')
 
+set(ax2, ...
+    'Position', ax1.Position, ...
+    'Color','none', ...
+    'XLim', xl, ...
+    'YLim', yl, ...
+    'DataAspectRatio', ax1.DataAspectRatio, ...
+    'PlotBoxAspectRatio', ax1.PlotBoxAspectRatio, ...
+    'XTick', [], ...
+    'YTick', [], ...
+    'Box','off')
+
+% Hide duplicate axes
+ax2.XTick = [];
+ax2.YTick = [];
+
+% Keep the axes synchronized
+linkaxes([ax1 ax2],'xy')
+
+% Make the top axes transparent
+set(ax2,'Color','none')
+
+title(ax1,'CATS2008 K1 + O1 amplitude over MEaSUREs speed')
+
+%%
+
+% Background in lon/lat coordinates
+measures('speed')
+hold on
+
+% Overlay CATS K1+O1 amplitude in lon/lat coordinates
+h = pcolor(lon, lat, KO_amp);
+shading interp
+set(h,'FaceAlpha',0.5)
+set(h,'EdgeColor','none')
+
+% Grounding line / coast if available in lon/lat
+measures('gl')
+
+cb = colorbar;
+ylabel(cb,'K1 + O1 amplitude (m)')
+
+xlabel('Longitude')
+ylabel('Latitude')
+title('CATS2008 K1 + O1 amplitude over MEaSUREs speed')
 %% Using the interpolation data, we can find the period
 % for each day of 14 days, we can find the max amplitude and plot that
