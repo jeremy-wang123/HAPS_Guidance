@@ -49,9 +49,9 @@ lonlim = [-108 -103];
 lat = -75;
 lon = -105; 
 
-% 14-day time vector, hourly
+% time vector, hourly
 t0 = datenum(2026,1,1,0,0,0);
-time=t0+(0:(31*24))/24;
+time=t0+(0:(46*24))/24;
 
 [z, constit] = tmd_tide_pred(Model, time, lat, lon, 'z');
 
@@ -63,7 +63,8 @@ ylabel('Tidal height');
 caxis(clim)
 
 
-% now plot each of the constit contributions
+
+%% now plot each of the constit contributions
 constit = strtrim(cellstr(constit));
 figure;
 
@@ -77,9 +78,75 @@ for i  =1:length(constit)
     ylabel('Tidal height');
 end
 
+
+
 % extract the periods from each of these plots 
+function [period] = extract_period(zi, time)
+    z0 = zi(1);
+    delta = 0.0005;
+    zmin = z0 - delta;
+    zmax = z0 + delta; 
+    idx = find(zi >= zmin &  zi <= zmax);
+end
+%% plot K1 and O1 sinusoidal contributions, averaged around Thwaites
+clear;clc
+addpath('/Users/jeremywang/Documents/MATLAB/CATS2008') 
+Model = '/Users/jeremywang/Documents/MATLAB/CATS2008/Model_CATS2008'; 
+
+latlim = [-76.0 -74.5];
+lonlim = [-108 -103];
+
+lats = latlim(1):0.5:latlim(2);
+lons = lonlim(1):0.5:lonlim(2);
+
+% time vector, hourly
+t0 = datenum(2026,1,1,0,0,0);
+time=t0+(0:(46*24))/24;
+
+% Check constituent list
+[~,~,~,conList] = tmd_extract_HC(Model,lats(1),lons(1),'z');
+conList_clean = lower(strtrim(cellstr(conList)));
+
+idx_k1 = find(strcmp(conList_clean,'k1'));
+idx_o1 = find(strcmp(conList_clean,'o1'));
+
+k1_total = NaN(nLat,nLon,nTime);
+o1_total = NaN(nLat,nLon,nTime);
+z_total = zeros(length(lats), length(lons), length(time));
+for i=1:length(lats)
+    for j=1:length(lons)
+        k1 = tmd_tide_pred(Model, time, lats(i), lons(j), 'z', idx_k1);
+        o1 = tmd_tide_pred(Model, time, lats(i), lons(j), 'z', idx_o1);
+        
+        k1_total(i,j,:) = k1;
+        o1_total(i,j,:) = o1;
+        z_total(i,j,:) = k1 + o1;
+    end
+end
 
 
+k1mean    = squeeze(mean(k1_total, [1 2], 'omitnan'));
+o1mean    = squeeze(mean(o1_total, [1 2], 'omitnan'));
+totalmean = squeeze(mean(z_total,  [1 2], 'omitnan'));
+
+
+%%
+figure;
+subplot(3,1,1)
+plot(time - t0, k1mean)
+title('K1 Thwaites Averaged')
+xlabel('Hours')
+ylabel('Height')
+subplot(3,1,2)
+plot(time - t0, o1mean)
+title('O1 Thwaites Averaged')
+xlabel('Hours')
+ylabel('Height')
+subplot(3,1,3)
+plot(time - t0, totalmean)
+title('K1+O1 Thwaites Averaged')
+xlabel('Hours')
+ylabel('Height')
 %% K1 + O1 amplitude map from CATS2008 near Thwaites
 
 addpath('/Users/jeremywang/Documents/MATLAB/CATS2008')

@@ -31,10 +31,51 @@ vyq = vy(1:skip:end,1:skip:end);
 [X,Y] = meshgrid(xq,yq);
 
 h = quiver(X,Y,vxq',vyq','k','LineWidth',0.8);
+xlabel('x (m)');
+ylabel('y (m)');
 xlim(xl)
 ylim(yl)
 set(h,'AutoScaleFactor',1)
 axis equal
+
+%% Quiver plot for Thwaites
+figure
+mapzoomps('Thwaites Glacier')
+measuresps('speed','log','alpha',0.7)
+cb = colorbar;
+cb.Ticks = [0 1 2 3];
+cb.TickLabels = {'1','10','100','1000'};
+hold on
+measuresps('gl','r')
+
+% manually plotting quivers because measuresps doesn't show all velocities
+% Get current map limits
+xl = xlim;
+yl = ylim;
+
+% Read MEaSUREs velocity data
+x = ncread('antarctica_ice_velocity_450m_v2.nc','x');
+y = ncread('antarctica_ice_velocity_450m_v2.nc','y');
+vx = ncread('antarctica_ice_velocity_450m_v2.nc','VX');
+vy = ncread('antarctica_ice_velocity_450m_v2.nc','VY');
+
+% Downsample manually 
+skip = 30;   
+
+xq = x(1:skip:end);
+yq = y(1:skip:end);
+vxq = vx(1:skip:end,1:skip:end);
+vyq = vy(1:skip:end,1:skip:end);
+
+[X,Y] = meshgrid(xq,yq);
+
+h = quiver(X,Y,vxq',vyq','k','LineWidth',0.8);
+title('Velocity plot of Thwaites Glacier')
+xlim(xl)
+ylim(yl)
+xlabel('x (m)');
+ylabel('y (m)');
+set(h,'AutoScaleFactor',1)
 
 %% Sinusoidal plot of tidal amplitude 14 day time series 
 addpath('/Users/jeremywang/Documents/MATLAB/CATS2008') 
@@ -49,11 +90,12 @@ lonlim = [-108 -103];
 lat = -75;
 lon = -105; 
 
-% 14-day time vector, hourly
+% time vector, hourly
 t0 = datenum(2026,1,1,0,0,0);
-time=t0+(0:(31*24));
+time=t0+(0:(14*24))/24;
 
-[z, constit] = tmd_tide_pred(Model, time, lat, lon, 'z');
+[z, conlist] = tmd_tide_pred(Model, time, lat, lon, 'z');
+conList_clean = lower(strtrim(cellstr(conlist)));
 
 figure;
 plot(time - t0, z, 'b', 'LineWidth',1);
@@ -61,31 +103,89 @@ grid on;
 xlabel('Time, days since 2026');
 ylabel('Tidal height');
 caxis(clim)
-
-
-% now plot each of the constit contributions
-constit = strtrim(cellstr(constit));
+%% now plot each of the constit contributions
 figure;
 
-for i  =1:length(constit)
+for i  =1:length(conList_clean)
     zi = tmd_tide_pred(Model, time, lat, lon, 'z', i);
     
     subplot(5,2,i)
-    plot(time - t0, zi, 'LineWidth', 1, 'DisplayName', constit{i})
-    title(constit{i})
-    xlabel('Time, hours since 2026');
+    plot(time - t0, zi, 'LineWidth', 1, 'DisplayName', conList_clean{i})
+    title(conList_clean{i})
+    xlabel('Time, days since 2026');
     ylabel('Tidal height');
 end
 
-% extract the periods from each of these plots 
-function [period] = extract_period(zi, time)
-    z0 = zi(1);
-    delta = 0.0005;
-    zmin = z0 - delta;
-    zmax = z0 + delta; 
-    idx = find(zi >= zmin &  zi <= zmax);
+% extract the periods from each of these plots
+period = struct()
+for i=1:length(conList_clean)
+    con = conList_clean(i);
+    fprintf(con)
 end
 
+period.(con) = 
+period.k1
+[~,~,~,omega,~,~] = constit('k1');
+T = 2*pi/omega * (1/3600); % converted to hours
+
+
+%% plot K1 and O1 sinusoidal contributions, averaged around Thwaites (from paper)
+clear;clc;
+addpath('/Users/jeremywang/Documents/MATLAB/CATS2008') 
+Model = '/Users/jeremywang/Documents/MATLAB/CATS2008/Model_CATS2008'; 
+
+latlim = [-76.0 -74.5];
+lonlim = [-108 -103];
+
+lats = latlim(1):0.5:latlim(2);
+lons = lonlim(1):0.5:lonlim(2);
+
+% time vector, hourly
+t0 = datenum(2026,1,1,0,0,0);
+time=t0+(0:(46*24))/24;
+
+% Check constituent list
+[~,~,~,conList] = tmd_extract_HC(Model,lats(1),lons(1),'z');
+conList_clean = lower(strtrim(cellstr(conList)));
+
+idx_k1 = find(strcmp(conList_clean,'k1'));
+idx_o1 = find(strcmp(conList_clean,'o1'));
+
+k1_total = NaN(length(lats), length(lons), length(time));
+o1_total = NaN(length(lats), length(lons), length(time));
+z_total = NaN(length(lats), length(lons), length(time));
+for i=1:length(lats)
+    for j=1:length(lons)
+        k1 = tmd_tide_pred(Model, time, lats(i), lons(j), 'z', idx_k1);
+        o1 = tmd_tide_pred(Model, time, lats(i), lons(j), 'z', idx_o1);
+        
+        k1_total(i,j,:) = k1;
+        o1_total(i,j,:) = o1;
+        z_total(i,j,:) = k1 + o1;
+    end
+end
+
+
+k1mean    = squeeze(mean(k1_total, [1 2], 'omitnan'));
+o1mean    = squeeze(mean(o1_total, [1 2], 'omitnan'));
+totalmean = squeeze(mean(z_total,  [1 2], 'omitnan'));
+
+figure;
+subplot(3,1,1)
+plot(time - t0, k1mean)
+title('K1 Thwaites Averaged')
+xlabel('Hours')
+ylabel('Height')
+subplot(3,1,2)
+plot(time - t0, o1mean)
+title('O1 Thwaites Averaged')
+xlabel('Hours')
+ylabel('Height')
+subplot(3,1,3)
+plot(time - t0, totalmean)
+title('K1+O1 Thwaites Averaged')
+xlabel('Hours')
+ylabel('Height')
 %% K1 + O1 amplitude map from CATS2008 near Thwaites
 
 addpath('/Users/jeremywang/Documents/MATLAB/CATS2008')
