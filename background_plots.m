@@ -3,7 +3,9 @@
 %% Quiver and color plot of ice velocities
 figure
 measuresps('speed','log','alpha',0.7)
-colorbar
+cb = colorbar;
+cb.Ticks = [0 1 2 3];
+cb.TickLabels = {'1','10','100','1000'};
 hold on
 measuresps('gl','r')
 
@@ -49,7 +51,7 @@ lon = -105;
 
 % 14-day time vector, hourly
 t0 = datenum(2026,1,1,0,0,0);
-time=t0+(0:(31*24))/24;
+time=t0+(0:(31*24));
 
 [z, constit] = tmd_tide_pred(Model, time, lat, lon, 'z');
 
@@ -71,8 +73,17 @@ for i  =1:length(constit)
     subplot(5,2,i)
     plot(time - t0, zi, 'LineWidth', 1, 'DisplayName', constit{i})
     title(constit{i})
-    xlabel('Time, days since 2026');
+    xlabel('Time, hours since 2026');
     ylabel('Tidal height');
+end
+
+% extract the periods from each of these plots 
+function [period] = extract_period(zi, time)
+    z0 = zi(1);
+    delta = 0.0005;
+    zmin = z0 - delta;
+    zmax = z0 + delta; 
+    idx = find(zi >= zmin &  zi <= zmax);
 end
 
 %% K1 + O1 amplitude map from CATS2008 near Thwaites
@@ -161,7 +172,6 @@ clear;clc;
 addpath('/Users/jeremywang/Documents/MATLAB/CATS2008')
 Model = '/Users/jeremywang/Documents/MATLAB/CATS2008/Model_CATS2008';
 
-% Thwaites region
 latrange = -90.0:0.02:-60;
 lonrange = -180:0.02:180;
 
@@ -190,6 +200,7 @@ figure
 % ice speed plot
 ax1 = axes;
 measuresps('speed', 'log')
+
 hold on
 measuresps('gl','k')
 
@@ -201,6 +212,8 @@ yl = ylim(ax1);
 
 colormap(ax1, parula)
 cb1 = colorbar(ax1,'westoutside');
+cb1.Ticks = [0 1 2 3];
+cb1.TickLabels = {'1','10','100','1000'};
 ylabel(cb1,'Ice speed (m/yr)')
 
 % tidal amplitude plot
@@ -235,5 +248,93 @@ uistack(ax1,'bottom')
 
 title(ax1,'CATS2008 K1 + O1 tidal amplitude over ice surface speed')
 
+
+%% Now expand the constituent set to include all 10 constituents
+
+clear;clc;
+
+addpath('/Users/jeremywang/Documents/MATLAB/CATS2008')
+Model = '/Users/jeremywang/Documents/MATLAB/CATS2008/Model_CATS2008';
+
+latrange = -90.0:0.2:-60;
+lonrange = -180:0.2:180;
+
+[lon,lat] = meshgrid(lonrange,latrange);
+
+% Check constituent list
+[~,~,~,conList] = tmd_extract_HC(Model,lat(1),lon(1),'z');
+conList_clean = lower(strtrim(cellstr(conList)));
+
+% Extract harmonic amplitudes
+[amp,~,~,~] = tmd_extract_HC(Model,lat,lon,'z');
+
+% sum them up
+ampsize = size(amp);
+amp_sum = zeros(1, ampsize(2), ampsize(3));
+for i=1:length(conList)
+    amp_sum = amp_sum + amp(i,:,:);
+end
+amp_sum = squeeze(amp_sum);
+
+% Convert CATS lon/lat grid to polar stereographic x/y used by CATS
+[x,y] = ll2ps(lat,lon);
+
+% add displacement
+dx = 0;
+x = x + dx;
+figure
+% ice speed plot
+ax1 = axes;
+measuresps('speed', 'log')
+
+hold on
+measuresps('gl','k')
+
+axis(ax1,'equal')
+axis(ax1,'manual')
+
+xl = xlim(ax1);
+yl = ylim(ax1);
+
+colormap(ax1, parula)
+cb1 = colorbar(ax1,'westoutside');
+cb1.Ticks = [0 1 2 3];
+cb1.TickLabels = {'1','10','100','1000'};
+ylabel(cb1,'Ice speed (m/yr)')
+
+% tidal amplitude plot
+ax2 = axes;
+
+pcolor(ax2, x, y, amp_sum)
+shading(ax2,'interp')
+set(findobj(ax2,'Type','Surface'), ...
+    'FaceAlpha',0.5, ...
+    'EdgeColor','none')
+
+colormap(ax2, turbo)
+cb2 = colorbar(ax2,'eastoutside');
+ylabel(cb2,'Total tidal amplitude (m)')
+
+% Match axes exactly
+set(ax2, ...
+    'Position', ax1.Position, ...
+    'Color','none', ...
+    'XLim', xl, ...
+    'YLim', yl, ...
+    'DataAspectRatio', ax1.DataAspectRatio, ...
+    'PlotBoxAspectRatio', ax1.PlotBoxAspectRatio, ...
+    'XTick', [], ...
+    'YTick', [], ...
+    'Box','off')
+
+linkaxes([ax1 ax2],'xy')
+
+% Put ice-speed axes visually underneath
+uistack(ax1,'bottom')
+
+title(ax1,'CATS2008 tidal amplitude over ice surface speed')
+
 %% Using the interpolation data, we can find the period
 % for each day of 14 days, we can find the max amplitude and plot that
+
+%% Calculate the beat frequency
