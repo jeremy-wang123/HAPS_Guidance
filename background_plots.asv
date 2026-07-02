@@ -21,7 +21,7 @@ vx = ncread('antarctica_ice_velocity_450m_v2.nc','VX');
 vy = ncread('antarctica_ice_velocity_450m_v2.nc','VY');
 
 % Downsample manually 
-skip = 150;   
+skip = 200;   
 
 xq = x(1:skip:end);
 yq = y(1:skip:end);
@@ -439,7 +439,6 @@ clear;clc;
 addpath('/Users/jeremywang/Documents/MATLAB/CATS2008') 
 Model = '/Users/jeremywang/Documents/MATLAB/CATS2008/Model_CATS2008'; 
 
-
 latlim = [-76.0 -74.5];
 lonlim = [-108 -103];
 
@@ -488,7 +487,6 @@ beatPeriod.k1_o1
 %% Generating map of daily tidal height for K1 and O1 in Antarctica
 clear; clc;
 addpath('/Users/jeremywang/Documents/MATLAB/CATS2008')
-addpath('/Users/jeremywang/Documents/MATLAB/measures_v3.1.2/measures')
 Model = '/Users/jeremywang/Documents/MATLAB/CATS2008/Model_CATS2008';
 
 latlim = [-78.0 -73];
@@ -581,7 +579,4 @@ for i=1:length(time)
     uistack(ax1,'bottom')
     
     title(ax1, sprintf('CATS2008 K1 + O1 tidal amplitude Day %.1f', time(i) - t0));
-    figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/time_series_thwaites';
-    exportgraphics(gcf, fullfile(figure_dir,sprintf('Thwaites_Day_%d.jpg', time(i) - t0)), ...
-    'Resolution',300)
 end
