@@ -104,6 +104,10 @@ xlabel('Time, days since 2026');
 ylabel('Tidal height');
 caxis(clim)
 %% now plot each of the constit contributions
+% specific coordinate choice 
+lat = -75;
+lon = -105; 
+
 figure;
 
 for i  =1:length(conList_clean)
@@ -118,15 +122,16 @@ end
 
 % extract the periods from each of these plots
 period = struct()
-for i=1:length(conList_clean)
-    con = conList_clean(i);
-    fprintf(con)
-end
+for i = 1:length(conList_clean)
+    con = conList_clean{i};
+    fprintf('%s\n', con)
 
-period.(con) = 
-period.k1
-[~,~,~,omega,~,~] = constit('k1');
-T = 2*pi/omega * (1/3600); % converted to hours
+    % extract the period in hours
+    [~,~,~,omega,~,~] = constit(con);
+    T = 2*pi/omega * (1/(3600*24)); % converted to days
+
+    period.(con) = T;
+end
 
 
 %% plot K1 and O1 sinusoidal contributions, averaged around Thwaites (from paper)
@@ -232,8 +237,12 @@ yl = ylim(ax1);
 
 colormap(ax1, parula)
 cb1 = colorbar(ax1,'westoutside');
+cb1.Ticks = [0 1 2 3];
+cb1.TickLabels = {'1','10','100','1000'};
 ylabel(cb1,'Ice speed (m/yr)')
 
+xlabel('x (m)');
+ylabel('y (m)');
 % tidal amplitude plot
 ax2 = axes;
 
@@ -316,6 +325,8 @@ cb1.Ticks = [0 1 2 3];
 cb1.TickLabels = {'1','10','100','1000'};
 ylabel(cb1,'Ice speed (m/yr)')
 
+xlabel('x (m)');
+ylabel('y (m)');
 % tidal amplitude plot
 ax2 = axes;
 
@@ -402,6 +413,9 @@ cb1.Ticks = [0 1 2 3];
 cb1.TickLabels = {'1','10','100','1000'};
 ylabel(cb1,'Ice speed (m/yr)')
 
+xlabel('x (m)');
+ylabel('y (m)');
+
 % tidal amplitude plot
 ax2 = axes;
 
@@ -433,8 +447,5 @@ linkaxes([ax1 ax2],'xy')
 uistack(ax1,'bottom')
 
 title(ax1,'CATS2008 tidal amplitude over ice surface speed')
-
-%% Using the interpolation data, we can find the period
-% for each day of 14 days, we can find the max amplitude and plot that
 
 %% Calculate the beat frequency
