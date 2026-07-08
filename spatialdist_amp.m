@@ -96,17 +96,23 @@ percentages_2 = extract_percentages(2);
 percentages_3 = extract_percentages(3);
 percentages_4 = extract_percentages(4);
 percentages_5 = extract_percentages(5);
-%%
+percentages_6 = extract_percentages(6);
+percentages_7 = extract_percentages(7);
+percentages_8 = extract_percentages(8);
+
 figure;
 histogram(percentages_2, 'Normalization', 'pdf')
 hold on; 
 histogram(percentages_3, 'Normalization', 'pdf')
 histogram(percentages_4, 'Normalization', 'pdf')
-histogram(percentages_5, 'Normalization', 'pdf', 'Facecolor', 'green')
+histogram(percentages_5, 'Normalization', 'pdf')
+histogram(percentages_6, 'Normalization', 'pdf')
+histogram(percentages_7, 'Normalization', 'pdf')
+histogram(percentages_8, 'Normalization', 'pdf')
 
 xlabel('Percent')
 ylabel('Probability Density')
-legend('Top 2', 'Top 3', 'Top 4', 'Top 5');
+legend('Top 2', 'Top 3', 'Top 4', 'Top 5', 'Top 6', 'Top 7', 'Top 8');
 title('Percentage contribution to total amplitude from constituents')
 
 %% function for extracting percentages

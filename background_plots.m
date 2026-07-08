@@ -170,7 +170,7 @@ ylabel('Height')
 subplot(3,1,2)
 plot(time - t0, o1mean)
 title('O1 Thwaites Averaged')
-xlabel('Hours')
+xlabel('Days')
 ylabel('Height')
 subplot(3,1,3)
 plot(time - t0, totalmean)
@@ -580,7 +580,7 @@ for i=1:length(time)
     % Put ice-speed axes visually underneath
     uistack(ax1,'bottom')
     
-    title(ax1, sprintf('CATS2008 K1 + O1 tidal amplitude Day %.1f', time(i) - t0));
+    title(ax1, sprintf('CATS2008 K1 + O1 tidal magnitude Day %.1f', time(i) - t0));
     figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/time_series_thwaites';
     exportgraphics(gcf, fullfile(figure_dir,sprintf('Thwaites_Day_%d.jpg', time(i) - t0)), ...
     'Resolution',300)
