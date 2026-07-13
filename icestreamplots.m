@@ -250,7 +250,7 @@ for i=1:length(percents)
     mask = grad_speed_grounded > thresholds(i);
     
     % Remove small connected components
-    min_pix = 100;      % Adjust this value as needed
+    min_pix = 150;      % Adjust this value as needed
     mask = bwareaopen(mask, min_pix);
     
     % Plot contour of cleaned mask
@@ -266,8 +266,8 @@ for i=1:length(percents)
 
     fig_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/velocity_grad_plots';
     
-    exportgraphics(gcf, fullfile(fig_dir,sprintf('cleaned_grounded_velocity_grad_%d.jpg', percents(i)*10)), ...
-    'Resolution',300)
+    % exportgraphics(gcf, fullfile(fig_dir,sprintf('cleaned_grounded_velocity_grad_%d.jpg', percents(i)*10)), ...
+    % 'Resolution',300)
 end
 
 
@@ -392,3 +392,93 @@ function r = local_percentile_rank(z)
         r = mean(vals <= center);
     end
 end
+
+%% Using antbounds and ice flowlines package
+
+%%% Reading data
+x = ncread('antarctica_ice_velocity_450m_v2.nc','x');
+y = ncread(['antarctica_ice_velocity_450m_v' ...
+    '2.nc'],'y');
+u = ncread('antarctica_ice_velocity_450m_v2.nc','VX');
+v = ncread('antarctica_ice_velocity_450m_v2.nc','VY');
+
+u = u';
+v = v';
+
+% magnitude of the velocity vector
+speed = hypot(u, v); 
+
+[xmesh, ymesh] = meshgrid(x, y);
+
+%%% Eliminating data points not on grounded ice
+grounded = isgrounded(xmesh, ymesh);
+speed_plot = speed;
+speed_grounded = speed_plot;
+speed_grounded(~grounded) = NaN;
+
+%%% extract coordinate region of interest
+fig = figure;
+mapzoomps('Thwaites Glacier')
+xl = xlim;
+yl = ylim;
+close(fig)
+
+% Get x and y indices within the displayed region
+ix = x >= xl(1) & x <= xl(2);
+iy = y >= yl(1) & y <= yl(2);
+
+% Subset coordinates
+x_roi = x(ix);
+y_roi = y(iy);
+
+% Subset data
+speed_roi = speed_grounded(iy, ix);
+
+figure;
+pcolor(x_roi, y_roi, speed_roi);
+shading flat;
+axis image;
+set(gca,'YDir','normal');
+
+colormap(parula);
+cb = colorbar;
+set(gca,'ColorScale');
+clim([1 1000]);
+cb.Label.String = 'Speed (m/yr)';
+
+hold on;
+
+% plotting ice flowlines
+
+[xstart,ystart] = psgrid('thwaites glacier',500,30, 'xy');
+
+flowline(xstart,ystart,'plotxy', 'color', 'green')
+
+% plotting the ice shelf
+[xgrid,ygrid] = psgrid('Thwaites Glacier',700,10,'xy');
+axis image
+antbounds('gl','k')
+antbounds('coast','k')
+antbounds('shelves','k')
+scalebarps
+
+shelf = isiceshelf(xgrid,ygrid);
+plot(xgrid(shelf),ygrid(shelf),'kx')
+
+[wx,wy] = antbounds_data('Thwaites','xy');
+plot(wx,wy,'r','linewidth',2)
+
+thwaites = inpolygon(xgrid,ygrid,wx,wy);
+plot(xgrid(thwaites),ygrid(thwaites),'ro')
+
+% grounding line
+mapzoomps('Thwaites Glacier')
+xl = xlim;
+yl = ylim;
+measuresps('gl','k');
+
+% labels
+xlabel('x (m)');
+ylabel('y (m)');
+xlim(xl);
+ylim(yl);
