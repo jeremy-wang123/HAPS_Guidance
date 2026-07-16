@@ -165,7 +165,7 @@ figure;
 subplot(3,1,1)
 plot(time - t0, k1mean)
 title('K1 Thwaites Averaged')
-xlabel('Hours')
+xlabel('Days')
 ylabel('Height')
 subplot(3,1,2)
 plot(time - t0, o1mean)
@@ -175,7 +175,7 @@ ylabel('Height')
 subplot(3,1,3)
 plot(time - t0, totalmean)
 title('K1+O1 Thwaites Averaged')
-xlabel('Hours')
+xlabel('Days')
 ylabel('Height')
 %% K1 + O1 amplitude map from CATS2008 near Thwaites
 
@@ -221,11 +221,11 @@ axis(ax1,'manual')
 xl = xlim(ax1);
 yl = ylim(ax1);
 
-colormap(ax1, parula)
-cb1 = colorbar(ax1,'westoutside');
-cb1.Ticks = [0 1 2 3];
-cb1.TickLabels = {'1','10','100','1000'};
-ylabel(cb1,'Ice speed (m/yr)')
+colormap(parula)
+cb = colorbar('westoutside');
+cb.Ticks = [0 1 2 3];
+cb.TickLabels = {'1','10','100','1000'};
+ylabel(cb,'Ice speed (m/yr)')
 
 xlabel('x (m)');
 ylabel('y (m)');

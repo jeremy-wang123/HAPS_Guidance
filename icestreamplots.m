@@ -61,12 +61,12 @@ for i=1:length(thresholds)
     yl = ylim;
     
     
-    measuresps('speed');
+    measuresps('speed', 'log');
     hold on;
     colormap(parula);
-    cb = colorbar;
-    set(gca,'ColorScale');
-    clim([1 1000]);
+    cb = colorbar('westoutside');
+    cb.Ticks = [0 1 2 3];
+    cb.TickLabels = {'1','10','100','1000'};
     cb.Label.String = 'Speed (m/yr)';
     measuresps('gl','k');
 
@@ -78,8 +78,8 @@ for i=1:length(thresholds)
     ylim(yl);
     xlabel('x (m)');
     ylabel('y (m)');
-    % exportgraphics(gcf, fullfile(fig_dir,sprintf('velocity_grad_%d.jpg', percents(i)*10)), ...
-    % 'Resolution',300)
+    exportgraphics(gcf, fullfile(fig_dir,sprintf('velocity_grad_%d.jpg', percents(i)*10)), ...
+    'Resolution',300)
 end
 
 %% Plotting strain rates
@@ -108,12 +108,13 @@ for i=1:length(percentiles)
     xl = xlim;
     yl = ylim;
     
-    measuresps('speed')
+    measuresps('speed', 'log')
     hold on;
     colormap(parula)
-    colorbar
-    set(gca,'ColorScale','log')
-    clim([1 1000])
+    cb = colorbar('westoutside');
+    cb.Ticks = [0 1 2 3];
+    cb.TickLabels = {'1','10','100','1000'};
+    cb.Label.String = 'Speed (m/yr)';
 
     measuresps('gl','k')
 
@@ -164,9 +165,9 @@ for i=1:length(percents)
     hold on
     
     colormap(parula);
-    cb = colorbar;
-    set(gca,'ColorScale');
-    clim([1 1000]);
+    set(gca,'ColorScale','log');
+    clim([1 4000]);   % or whaAstever range you want
+    cb = colorbar('westoutside');
     cb.Label.String = 'Speed (m/yr)';
     
     mapzoomps('Thwaites Glacier')
@@ -236,9 +237,9 @@ for i=1:length(percents)
     hold on
     
     colormap(parula);
-    cb = colorbar;
-    set(gca,'ColorScale');
-    clim([1 1000]);
+    set(gca,'ColorScale','log');
+    clim([1 4000]);   % or whatever range you want
+    cb = colorbar('westoutside');
     cb.Label.String = 'Speed (m/yr)';
     
     mapzoomps('Thwaites Glacier')
@@ -266,8 +267,8 @@ for i=1:length(percents)
 
     fig_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/velocity_grad_plots';
     
-    % exportgraphics(gcf, fullfile(fig_dir,sprintf('cleaned_grounded_velocity_grad_%d.jpg', percents(i)*10)), ...
-    % 'Resolution',300)
+    exportgraphics(gcf, fullfile(fig_dir,sprintf('cleaned_grounded_velocity_grad_%d.jpg', percents(i)*10)), ...
+    'Resolution',300)
 end
 
 
@@ -441,9 +442,9 @@ axis image;
 set(gca,'YDir','normal');
 
 colormap(parula);
-cb = colorbar;
-set(gca,'ColorScale');
-clim([1 1000]);
+set(gca,'ColorScale','log');
+clim([1 4000]);   % or whatever range you want
+cb = colorbar('westoutside');
 cb.Label.String = 'Speed (m/yr)';
 
 hold on;
@@ -465,11 +466,11 @@ scalebarps
 shelf = isiceshelf(xgrid,ygrid);
 plot(xgrid(shelf),ygrid(shelf),'kx')
 
-[wx,wy] = antbounds_data('Thwaites','xy');
-plot(wx,wy,'r','linewidth',2)
-
-thwaites = inpolygon(xgrid,ygrid,wx,wy);
-plot(xgrid(thwaites),ygrid(thwaites),'ro')
+% [wx,wy] = antbounds_data('Thwaites','xy');
+% plot(wx,wy,'r','linewidth',2)
+% 
+% thwaites = inpolygon(xgrid,ygrid,wx,wy);
+% plot(xgrid(thwaites),ygrid(thwaites),'ro')
 
 % grounding line
 mapzoomps('Thwaites Glacier')

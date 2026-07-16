@@ -248,7 +248,5 @@ fprintf('%.6f\n', max_weight);
 % plot trajectory
 plot_line_trajectory(distance, best_angle, final_x, final_y)
 
-
-
 %% plots for the weights
 plot_weights_grid(search_history, 4)
