@@ -457,7 +457,7 @@ for i = 1:length(conList_clean)
     con = conList_clean{i};
     % extract the period in hours
     [~,~,~,omega,~,~] = constit(con);
-    T = 2*pi/omega * (1/(3600*24)); % converted to days
+    T = 2*pi/omega * (1/(3600)); % converted to days
     
     freq.(con) = 1/T; % cycles per day 
     period.(con) = T; % days

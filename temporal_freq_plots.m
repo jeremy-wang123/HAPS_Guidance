@@ -274,7 +274,7 @@ for i = 1:length(latrange)
     end
 end
 
-%%
+
 figure
 % ice speed plot
 ax1 = axes;
