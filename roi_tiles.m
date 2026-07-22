@@ -26,6 +26,7 @@ x_grid = x_limits(1):grid_resolution:x_limits(2);
 y_grid = y_limits(1):grid_resolution:y_limits(2);
 [X_grid, Y_grid] = meshgrid(x_grid, y_grid);
 
+%% Method 1: Extract entire Region
 % iterate through each gridpoint, determine if it switches status any 
 % point within 10km radius
 
@@ -40,7 +41,6 @@ for idx = 1:numel(X_grid)
         x0, y0, radius, search_spacing);
 end
 
-%% Grounding line plot
 figure;
 
 % Plot a constant-color layer
@@ -66,9 +66,65 @@ xlabel('x (m)');
 ylabel('y (m)');
 axis image;
 
-% figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/roi_tiled_plots';
-% exportgraphics(gcf, fullfile(figure_dir,sprintf('Pine_Island_%dkm_tiled.jpg', radius/1000)), ...
-% 'Resolution',300);
+%% Method 2: Extract Individual Glacier
+% Grounding line in the broader plotting region
+[xgl_all, ygl_all] = measures_data( ...
+    'gl', x_limits, y_limits, 'xy');
+
+% drainage basin
+[xbasin, ybasin] = basin_data( ...
+    'imbie refined', 'Haynes', 'xy');
+
+% Keep grounding-line points inside basin
+inside = inpolygon( ...
+    xgl_all, ygl_all, xbasin, ybasin);
+
+xgl_glacier = xgl_all;
+ygl_glacier = ygl_all;
+
+% Preserve separation between line segments
+xgl_glacier(~inside) = NaN;
+ygl_glacier(~inside) = NaN;
+
+% Find distance from each grid point to Thwaites grounding line
+grid_points = [X_grid(:), Y_grid(:)];
+gl_points   = [xgl_glacier(:), ygl_glacier(:)];
+
+% Distance to nearest grounding-line point
+[~, distance_to_gl] = knnsearch(gl_points, grid_points);
+
+% Logical mask: true if within radius
+sampling_zone = reshape( ...
+    distance_to_gl <= radius, ...
+    size(X_grid));
+
+figure;
+mapzoomps('Thwaites Glacier')
+measuresps('gl', 'b')
+
+hold on;
+
+% Plot a constant-color layer
+shade_layer = ones(size(sampling_zone));
+
+h = imagesc(x_grid, y_grid, shade_layer);
+set(gca, 'YDir', 'normal');
+
+% Make only sampling_zone == true visible
+h.AlphaData = 0.35 * double(sampling_zone);
+h.AlphaDataMapping = 'none';
+
+% Set overlay color
+colormap(gca, [1 0 0]);
+
+% Plot grounding line above overlay
+plot(xgl_glacier, ygl_glacier, 'k-', 'LineWidth', 3)
+
+xlim(x_limits);
+ylim(y_limits);
+xlabel('x (m)');
+ylabel('y (m)');
+axis image;
 
 %% PCA for singular flight path
 
@@ -108,8 +164,10 @@ y_right = y_pca - half_width*normal(2);
 % determine flight length of the line
 line_length = max(score(:,1)) - min(score(:,1));
 
-%% plotting singular line
+% plotting singular line
 figure;
+hold on;
+measuresps('gl', 'b');
 
 % Plot ROI overlay
 shade_layer = ones(size(sampling_zone));
@@ -123,10 +181,9 @@ h_roi.HandleVisibility = 'off';
 
 colormap(gca, [1 0 0]);
 
-hold on;
 
-% Plot grounding line
-measuresps('gl', 'k', 'LineWidth', 1.5);
+% Plot grounding line above overlay
+plot(xgl_glacier, ygl_glacier, 'k-', 'LineWidth', 3)
 
 % Plot PCA flight path
 plot(x_pca, y_pca, 'b-', ...
@@ -135,10 +192,11 @@ plot(x_pca, y_pca, 'b-', ...
 
 h_pca = patch([x_left fliplr(x_right)], ...
       [y_left fliplr(y_right)], ...
-      'b', ...
+      'cyan', ...
       'FaceAlpha',0.3, ...
       'EdgeColor','none', ...
       'LineWidth',2);
+
 
 axis image;
 xlim(x_limits);
@@ -169,8 +227,10 @@ legend([h_roi_legend, h_gl_legend, h_pca_legend], ...
 % exportgraphics(gcf, fullfile(figure_dir,'Thwaites_PCA_singular.jpg'), ...
 % 'Resolution',300);
 
-%% plotting parallel lines
+% plotting parallel lines
 figure;
+hold on;
+measuresps('gl', 'b');
 
 % Plot ROI overlay
 shade_layer = ones(size(sampling_zone));
@@ -178,16 +238,14 @@ shade_layer = ones(size(sampling_zone));
 h_roi = imagesc(x_grid, y_grid, shade_layer);
 set(gca, 'YDir', 'normal');
 
-h_roi.AlphaData = 0.35 * double(sampling_zone);
+h_roi.AlphaData = 0.5 * double(sampling_zone);
 h_roi.AlphaDataMapping = 'none';
 h_roi.HandleVisibility = 'off';
 
 colormap(gca, [1 0 0]);
 
-hold on;
-
-% Plot grounding line
-measuresps('gl', 'k', 'LineWidth', 1.5);
+% Plot grounding line above overlay
+plot(xgl_glacier, ygl_glacier, 'k-', 'LineWidth', 3)
 
 plot(x_pca, y_pca, 'b-', ...
      'LineWidth', 3, ...
@@ -195,15 +253,15 @@ plot(x_pca, y_pca, 'b-', ...
 
 h_pca = patch([x_left fliplr(x_right)], ...
       [y_left fliplr(y_right)], ...
-      'b', ...
-      'FaceAlpha',0.7, ...
+      'c', ...
+      'FaceAlpha',0.3, ...
       'EdgeColor','none', ...
       'LineWidth',2);
 
 total_flight = line_length; 
 
 % Plot PCA flight path
-for i=1:5
+for i=1:1
     x_offset = x_pca + S_range*i*normal(1);
     y_offset = y_pca + S_range*i*normal(2);
     
@@ -215,8 +273,8 @@ for i=1:5
     plot(x_offset, y_offset, 'b--', 'LineWidth', 2);
     patch([x_left fliplr(x_right)], ...
       [y_left fliplr(y_right)], ...
-      'b', ...
-      'FaceAlpha',0.7-0.1*i, ...
+      'c', ...
+      'FaceAlpha',0.3, ...
       'EdgeColor','none', ...
       'LineWidth',2);
 
@@ -231,8 +289,8 @@ for i=1:5
     
     patch([x_left fliplr(x_right)], ...
         [y_left fliplr(y_right)], ...
-        'b', ...
-        'FaceAlpha',0.7-0.1*i, ...
+        'c', ...
+        'FaceAlpha',0.3, ...
         'EdgeColor','none', ...
         'LineWidth',2);
 
@@ -284,6 +342,7 @@ ideal_flight_time = ideal_flight_length/(speed/1000); % days
 
 fprintf('Ideal distance for area coverage = %.4f km \n', ideal_flight_length);
 fprintf('Ideal flight time for area coverage = %.4f hours \n', ideal_flight_time);
+
 
 %% plot interpolated grounding line 
 
