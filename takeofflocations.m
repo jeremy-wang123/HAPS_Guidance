@@ -105,7 +105,7 @@ hold off;
 beta_el = 40; % elevation beam width
 beta_az = 40; % azimuth beam width
 theta = 40; % look angle
-z = 20; % altitude of flight
+z = 18; % altitude of flight
 
 S_range = z * (tand(theta + beta_el/2) - tand(theta - beta_el/2));
 S_azimuth = (2*z / cosd(theta)) * tand(beta_az/2);

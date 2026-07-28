@@ -195,13 +195,9 @@ conList_clean = lower(strtrim(cellstr(conList)));
 idx_k1 = find(strcmp(conList_clean,'k1'));
 idx_o1 = find(strcmp(conList_clean,'o1'));
 
-% Extract harmonic amplitudes
-[K1_amp,~,~,~] = tmd_extract_HC(Model,lat,lon,'z',idx_k1);
-[O1_amp,~,~,~] = tmd_extract_HC(Model,lat,lon,'z',idx_o1);
+[KO_amp,~,~,~] = tmd_extract_HC(Model,lat,lon,'z',[idx_k1, idx_o1]);
 
-% Combined diurnal amplitude
-KO_amp = K1_amp + O1_amp;
-
+KO_amp = squeeze(sum(KO_amp, 1));
 
 % Convert CATS lon/lat grid to polar stereographic x/y used by CATS
 [x,y] = ll2ps(lat,lon);

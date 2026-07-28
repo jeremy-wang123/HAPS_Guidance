@@ -26,6 +26,9 @@ x_grid = x_limits(1):grid_resolution:x_limits(2);
 y_grid = y_limits(1):grid_resolution:y_limits(2);
 [X_grid, Y_grid] = meshgrid(x_grid, y_grid);
 
+% Grounding line in the broader plotting region
+[xgl_all, ygl_all] = measures_data( ...
+    'gl', x_limits, y_limits, 'xy');
 %% Method 1: Extract entire Region
 % iterate through each gridpoint, determine if it switches status any 
 % point within 10km radius
@@ -67,13 +70,10 @@ ylabel('y (m)');
 axis image;
 
 %% Method 2: Extract Individual Glacier
-% Grounding line in the broader plotting region
-[xgl_all, ygl_all] = measures_data( ...
-    'gl', x_limits, y_limits, 'xy');
 
 % drainage basin
 [xbasin, ybasin] = basin_data( ...
-    'imbie refined', 'Haynes', 'xy');
+    'imbie refined', 'Thwaites', 'xy');
 
 % Keep grounding-line points inside basin
 inside = inpolygon( ...
@@ -100,7 +100,7 @@ sampling_zone = reshape( ...
 
 figure;
 mapzoomps('Thwaites Glacier')
-measuresps('gl', 'b')
+measuresps('gl', 'k')
 
 hold on;
 
@@ -132,7 +132,7 @@ axis image;
 beta_el = 40; % elevation beam width
 beta_az = 40; % azimuth beam width
 theta = 40; % look angle
-z = 20e3; % altitude of flight
+z = 18e3; % altitude of flight
 
 S_range = (z*deg2rad(beta_el)/(cosd(theta)^2)); % in m
 
@@ -167,7 +167,7 @@ line_length = max(score(:,1)) - min(score(:,1));
 % plotting singular line
 figure;
 hold on;
-measuresps('gl', 'b');
+measuresps('gl', 'k');
 
 % Plot ROI overlay
 shade_layer = ones(size(sampling_zone));
@@ -180,10 +180,6 @@ h_roi.AlphaDataMapping = 'none';
 h_roi.HandleVisibility = 'off';
 
 colormap(gca, [1 0 0]);
-
-
-% Plot grounding line above overlay
-plot(xgl_glacier, ygl_glacier, 'k-', 'LineWidth', 3)
 
 % Plot PCA flight path
 plot(x_pca, y_pca, 'b-', ...
@@ -220,9 +216,6 @@ legend([h_roi_legend, h_gl_legend, h_pca_legend], ...
     {'ROI', 'Grounding Line', 'SAR Flight Coverage'}, ...
     'Location', 'northeast');
 
-
-
-
 % figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/roi_tiled_plots';
 % exportgraphics(gcf, fullfile(figure_dir,'Thwaites_PCA_singular.jpg'), ...
 % 'Resolution',300);
@@ -230,7 +223,7 @@ legend([h_roi_legend, h_gl_legend, h_pca_legend], ...
 % plotting parallel lines
 figure;
 hold on;
-measuresps('gl', 'b');
+measuresps('gl', 'k');
 
 % Plot ROI overlay
 shade_layer = ones(size(sampling_zone));
@@ -243,9 +236,6 @@ h_roi.AlphaDataMapping = 'none';
 h_roi.HandleVisibility = 'off';
 
 colormap(gca, [1 0 0]);
-
-% Plot grounding line above overlay
-plot(xgl_glacier, ygl_glacier, 'k-', 'LineWidth', 3)
 
 plot(x_pca, y_pca, 'b-', ...
      'LineWidth', 3, ...
@@ -338,68 +328,226 @@ area = length(x_gl)*grid_resolution^2; % m^2
 
 % idealistic calculation of time required for coverage
 ideal_flight_length = area / (S_range) / 1000; % km
-ideal_flight_time = ideal_flight_length/(speed/1000); % days
+ideal_flight_time = ideal_flight_length/(speed/1000); % hours
 
 fprintf('Ideal distance for area coverage = %.4f km \n', ideal_flight_length);
 fprintf('Ideal flight time for area coverage = %.4f hours \n', ideal_flight_time);
 
+%% Plotting all ice streams in the Thwaites region
+glacier_names = { ...
+    'Pine Island', ...
+    'Thwaites', ...
+    'Haynes', ...
+    'Pope', ...
+    'Smith', ...
+    'Kohler'};
 
-%% plot interpolated grounding line 
+colors = lines(numel(glacier_names));    % or choose your own colors
 
-% Coordinate matrices
-[X_grid, Y_grid] = meshgrid(x_grid, y_grid);
+ideal_flight_lengths = cell(numel(glacier_names), 1);
+sampling_zones = cell(numel(glacier_names), 1);
 
-% Grounded/floating mask
-grounded_mask = isgrounded(X_grid, Y_grid);
-
-% Extract the grounded/floating boundary at logical level 0.5
-C = contourc(x_grid, y_grid, double(grounded_mask), [0.5 0.5]);
-
-segment_lengths = [];
-segments = {};
-
-col = 1;
-
-while col < size(C,2)
-
-    contour_level = C(1,col);
-    n_points = C(2,col);
-
-    % Coordinates for this contour segment
-    x_segment = C(1, col+1:col+n_points);
-    y_segment = C(2, col+1:col+n_points);
-
-    % Distance between consecutive points
-    dx = diff(x_segment);
-    dy = diff(y_segment);
-
-    % Length of this grounding-line segment
-    segment_length = sum(hypot(dx,dy));
-
-    segments{end+1} = [x_segment(:), y_segment(:)];
-    segment_lengths(end+1) = segment_length;
-
-    col = col + n_points + 1;
-end
-
-total_gl_length = sum(segment_lengths);
-
-fprintf('Total grounding-line length = %.2f km\n', ...
-    total_gl_length/1000);
+distance_line_handles = gobjects(0);
+distance_text_handles = gobjects(0);
+min_distance = NaN(numel(glacier_names));
 
 figure;
+mapzoomps('Thwaites Glacier');
 hold on;
+measuresps('gl', 'k', 'DisplayName', 'Grounding Line')
 
-for k = 1:numel(segments)
-    plot(segments{k}(:,1), segments{k}(:,2), ...
-        'k-', 'LineWidth', 1.5);
+for i = 1:numel(glacier_names)
+    % Extract grounding line for this glacier
+
+    [xbasin,ybasin] = basin_data( ...
+        'imbie refined', glacier_names{i}, 'xy');
+
+    inside = inpolygon(xgl_all, ygl_all, xbasin, ybasin);
+
+    xgl_glacier = xgl_all;
+    ygl_glacier = ygl_all;
+
+    xgl_glacier(~inside) = NaN;
+    ygl_glacier(~inside) = NaN;
+
+    valid = isfinite(xgl_glacier);
+
+    gl_points = [ ...
+        xgl_glacier(valid), ...
+        ygl_glacier(valid)];
+    
+    [~,distance_to_gl] = knnsearch(gl_points,grid_points);
+
+    sampling_zone = reshape( ...
+        distance_to_gl <= radius,...
+        size(X_grid));
+    
+    sampling_zones{i} = sampling_zone;
+
+    % figure out idealized flight path length
+    grid_size = X_grid(sampling_zone);
+    area = length(grid_size)*grid_resolution^2; % m^2
+    ideal_flight_lengths{i} = area / (S_range) / 1000; % km
+    ideal_flight_times{i} = ideal_flight_lengths{i}/(speed/1000); % hours
+
+    % Calculate distance between consecutive ice streams
+    mask_i = sampling_zones{i};
+    
+    points_i = [ ...
+        X_grid(mask_i), ...
+        Y_grid(mask_i)];
+    
+    if i > 1
+    
+        j = i - 1;
+    
+        mask_j = sampling_zones{j};
+    
+        points_j = [ ...
+            X_grid(mask_j), ...
+            Y_grid(mask_j)];
+    
+        % For each point in region i, find nearest point in region j
+        [nearest_idx_j, distances] = knnsearch(points_j, points_i);
+    
+        % Find the minimum of those nearest-neighbor distances
+        [min_distance(i,j), idx_i] = min(distances);
+    
+        % Corresponding closest point in region j
+        idx_j = nearest_idx_j(idx_i);
+    
+        % Coordinates of the two closest points
+        closest_point_i = points_i(idx_i,:);
+        closest_point_j = points_j(idx_j,:);
+    
+        % Symmetric distance matrix
+        % min_distance(j,i) = min_distance(i,j);
+
+        if min_distance(i,j) > 0
+        
+            min_distance_km = min_distance(i,j) / 1000;
+        
+            % Plot line
+            h_line = plot( ...
+                 [closest_point_i(1), closest_point_j(1)], ...
+                 [closest_point_i(2), closest_point_j(2)], ...
+                 'r-', ...
+                 'LineWidth', 2, ...
+                 'HandleVisibility', 'off');
+            
+            distance_line_handles(end+1) = h_line;
+        
+            % Midpoint
+            x_mid = mean([closest_point_i(1), closest_point_j(1)]);
+            y_mid = mean([closest_point_i(2), closest_point_j(2)]);
+        
+            % Unit vector along the line
+            dx = closest_point_j(1) - closest_point_i(1);
+            dy = closest_point_j(2) - closest_point_i(2);
+            L = hypot(dx, dy);
+        
+            % Perpendicular unit vector
+            nx = -dy / L;
+            ny =  dx / L;
+        
+            % Offset (10 km)
+            offset = 75e3;
+        
+            h_text = text( ...
+                x_mid + offset*nx, ...
+                y_mid + offset*ny, ...
+                sprintf('%.0f km, %.0f minutes', min_distance_km, min_distance_km*1000/speed*60), ...
+                'HorizontalAlignment', 'center', ...
+                'VerticalAlignment', 'middle', ...
+                'FontWeight', 'bold', ...
+                'BackgroundColor', 'w', ...
+                'Margin', 2, ...
+                'Clipping', 'on');
+            
+            distance_text_handles(end+1) = h_text;
+        end
+    end 
+
+    % Plot colored sampling zone
+    shade = ones(size(sampling_zone));
+
+    h = imagesc(x_grid,y_grid,shade);
+
+    h.AlphaData = 0.35*double(sampling_zone);
+    h.AlphaDataMapping = 'none';
+
+    % Make this overlay a single solid color
+    h.CData = repmat(reshape(colors(i,:),1,1,3),...
+                     size(sampling_zone,1),...
+                     size(sampling_zone,2));
+    
+    % Plot grounding line
+    plot(xgl_glacier,ygl_glacier,...
+        'Color',colors(i,:),...
+        'LineWidth',3,...
+        'DisplayName',sprintf('%s: %.0f km, %.2f hours', glacier_names{i}, ideal_flight_lengths{i}, ideal_flight_times{i}));
 end
-measuresps('gl', 'r')
-axis image;
+
+set(gca,'YDir','normal');
+    axis image;
 xlim(x_limits);
 ylim(y_limits);
 
 xlabel('x (m)');
 ylabel('y (m)');
-title(sprintf('Grounding-line length: %.1f km', ...
-    total_gl_length/1000));
+
+uistack(distance_line_handles, 'top');
+uistack(distance_text_handles, 'top');
+legend('Location','northeast');
+
+
+% True north arrow (bottom-right)
+
+% Arrow location (10% from right, 10% from bottom)
+x0 = x_limits(2) - 0.10 * diff(x_limits);
+y0 = y_limits(1) + 0.20 * diff(y_limits);
+
+% Convert to lat/lon
+[lat0, lon0] = ps2ll(x0, y0);
+
+% Point slightly farther north
+lat_north = lat0 + 0.1;
+[x_north, y_north] = ll2ps(lat_north, lon0);
+
+% Direction toward true north
+dx = x_north - x0;
+dy = y_north - y0;
+
+% Normalize
+L = hypot(dx,dy);
+dx = dx/L;
+dy = dy/L;
+
+% Arrow length
+arrow_length = 80e3;   % 80 km
+
+dx = dx * arrow_length;
+dy = dy * arrow_length;
+
+% Draw arrow
+quiver( ...
+    x0, y0, ...
+    dx, dy, ...
+    0, ...
+    'k', ...
+    'LineWidth', 2.5, ...
+    'MaxHeadSize', 0.8, ...
+    'HandleVisibility', 'off');
+
+% "N" label
+text( ...
+    x0 + 1.15*dx, ...
+    y0 + 1.15*dy, ...
+    'N', ...
+    'HorizontalAlignment', 'center', ...
+    'VerticalAlignment', 'middle', ...
+    'FontSize', 16, ...
+    'FontWeight', 'bold', ...
+    'BackgroundColor', 'w', ...
+    'Margin', 1, ...
+    'HandleVisibility', 'off');
