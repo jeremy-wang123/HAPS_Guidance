@@ -235,57 +235,81 @@ x_km = x/1000;
 
 w = wa * (1 - (exp(-lambda*x) .* (cos(lambda*x) + sin(lambda*x))));
 
-% Settling-distance criterion
-tolerance = 0.01;  % 1% of far-field tidal amplitude
+%% Settling-distance criterion based on displacement uncertainty
 
-% Analytical settling distance based on the exponential envelope
-x_settle = log(sqrt(2)/tolerance)/lambda;  % m
+% Vertical displacement uncertainty
+% Must have the same units as w and wa, normally meters
+sigma_z = 0.002;  % m
+
+% calculate settling distance analytically
+x_settle = log(sqrt(2)*abs(wa)/sigma_z)/lambda;
 x_settle_km = x_settle/1000;
 
-fprintf('1/lambda flexural length: %.2f km\n',1/lambda/1000);
-fprintf('%.1f%% settling distance: %.2f km\n', ...
-    100*tolerance,x_settle_km);
+fprintf('1/lambda flexural length: %.2f km\n', ...
+    1/lambda/1000);
 
-%% plotting profile
+fprintf('Displacement uncertainty sigma_z: %.4f m\n', ...
+    sigma_z);
+
+fprintf('Settling distance within +/- sigma_z: %.2f km\n', ...
+    x_settle_km);
+
+%% Plotting profile
+
 figure;
-plot(x_km,w,'LineWidth',2)
-hold on
 
-% Far-field tidal displacement
-yline(wa,'--','Far Field tide', ...
-    'LabelHorizontalAlignment','left');
+plot(x_km, w, 'LineWidth', 2);
+hold on;
+
+% Far-field steady-state tidal displacement
+yline(wa, '--', 'Far-field tide', ...
+    'LabelHorizontalAlignment', 'left');
+
+% Upper and lower uncertainty bounds around steady state
+upper_bound = wa + sigma_z;
+lower_bound = wa - sigma_z;
+
+yline(upper_bound, ':', ...
+    '$\pm\sigma_z$', ...
+    'Interpreter','latex', ...
+    'LabelHorizontalAlignment','right');
+
+yline(lower_bound, ':');
 
 % Settling-distance marker
-xline(x_settle_km,':', ...
-    sprintf('%.1f%% settling distance = %.1f km', ...
-    100*tolerance,x_settle_km), ...
-    'LabelVerticalAlignment','middle', ...
-    'LabelHorizontalAlignment','left');
+xline(x_settle_km, ':', ...
+    sprintf('Settling distance = %.1f km', x_settle_km), ...
+    'LabelVerticalAlignment', 'middle', ...
+    'LabelHorizontalAlignment', 'left');
 
-% Tolerance limits
-yline(wa*(1+tolerance),':');
-yline(wa*(1-tolerance),':');
+xlabel('Distance from grounding line (km)');
+ylabel('Vertical displacement (m)');
+title('Elastic tidal flexure of the Thwaites Ice Shelf');
 
-xlabel('Distance from grounding line (km)')
-ylabel('Vertical displacement (m)')
-title('Elastic tidal flexure of the Thwaites Ice Shelf')
+xlim([0, L/1000]);
 
-xlim([0 L/1000])
+% Include the displacement profile and uncertainty bounds in the y-limits
+all_y_values = [w(:); upper_bound; lower_bound];
 
-% Tight vertical limits create useful vertical exaggeration
-w_range = max(w)-min(w);
-vertical_padding = 0.10*w_range;
+w_range = max(all_y_values) - min(all_y_values);
 
-ylim([min(w)-vertical_padding, ...
-      max([w(:); wa])+vertical_padding])
+% Avoid zero padding if the plotted values are nearly constant
+if w_range == 0
+    vertical_padding = max(abs(all_y_values))*0.1;
+else
+    vertical_padding = 0.10*w_range;
+end
 
-grid on
-box on
-set(gca,'FontSize',12,'LineWidth',1)
+ylim([min(all_y_values) - vertical_padding, ...
+      max(all_y_values) + vertical_padding]);
 
-figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures';
-exportgraphics(gcf, fullfile(figure_dir,'elastic_beam_profile.jpg'), ...
-'Resolution',300);
+grid on;
+box on;
+set(gca, 'FontSize', 12, 'LineWidth', 1);
+
+% figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures';
+% exportgraphics(gcf, fullfile(figure_dir,'elastic_beam_profile.jpg'), ...
+% 'Resolution',300);
 
 %%
 function [selected_names, selected_amps, selected_idx] = ...
