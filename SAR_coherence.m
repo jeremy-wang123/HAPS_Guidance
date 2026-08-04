@@ -3,82 +3,14 @@
 % constants
 c = 299792458; % speed of light, m/s
 f = 1.2e9; % cycles/sec
-theta = 40; % look angle in degrees
 lambda = c/f; % meters
 
-r_slant = 0.75; % m from Gamma manual
-beta_az = 40; % azimuth beam width
-altitude = 18e3; % m
-
-ry = r_slant / sind(theta); % range resolution (m)
-rx = 0.5; % azimuth resolution (m) (listed between 0.2 - 0.5 m)
-
-%% Exponential Temporal coherence
-%{
-Assumptions made within calculation: 
-1) Temporal coherence, sy, and sz are functions of time. Temporal coherence
-follows a first order decaying exponential, where 5*tau occurs at 6
-days, when the temporal coherence is approximately 0. (gamma(6 days) =
-0.7)
-2) Assume linear relationship between sy and sz, where sz = k*sy
-%}
-
-
-% parameters
-tau = 6/5 * 24 * 3600; % seconds
-k = [0.25 1 4]; % linear coefficient relating sy and sz
-t = 0:1:(3600*24*10); % 10 day simulation period
-t_days = t/(24*3600);
-
-% plot gamma as a function of time
-figure;
-% Calculate the temporal coherence function
-gamma = exp(-t/tau);
-plot(t_days,gamma);
-xlabel('Time (days)');
-ylabel('\gamma_{temporal}');
-title('Decaying Exponential \gamma_{temporal}')
-
-% plotting sy and sz
-figure;
-hold on;
-grid on;
-box on;
-
-colors = lines(length(k));
-
-for i = 1:length(k)
-
-    sy = (lambda/(4*pi)) .* sqrt(2*t./tau) ./ ...
-         sqrt(sind(theta).^2 + k(i)^2 .* cosd(theta).^2);
-
-    sz = k(i) .* sy;
-
-    % Horizontal displacement (solid)
-    plot(t_days, sy, '-', ...
-        'Color', colors(i,:), ...
-        'LineWidth', 2, ...
-        'DisplayName', sprintf('s_y, k = %.2f', k(i)));
-
-    % Vertical displacement (dashed)
-    plot(t_days, sz, '--', ...
-        'Color', colors(i,:), ...
-        'LineWidth', 2, ...
-        'DisplayName', sprintf('s_z, k = %.2f', k(i)));
-
-end
-
-xlabel('Time (days)');
-ylabel('RMS Scatterer Displacement (m)');
-title('Estimated Scatterer Displacement vs Time');
-
-legend('Location','northwest');
 
 %% Linear Temporal Coherence
 % Parameters for linear temporal coherence
 
 T_zero = 6 * 24 * 3600;          % coherence reaches zero at 6 days, s
-k = [0.25 1 4];                  % sz = k*sy
+k = 1;                  % sz = k*sy
 
 t = 0:60:(10 * 24 * 3600);       % 10-day simulation, 1-minute spacing
 t_days = t/(24*3600);
@@ -106,37 +38,24 @@ hold on;
 grid on;
 box on;
 
-colors = lines(length(k));
 
 % The inverse equation is undefined at gamma = 0
 valid = gamma_temporal > 0;
 
-for i = 1:length(k)
+sy = NaN(size(t));
+sz = NaN(size(t));
 
-    sy = NaN(size(t));
-    sz = NaN(size(t));
+sy(valid) = (lambda/(4*pi)) .* ...
+    sqrt( ...
+    -2 .* log(gamma_temporal(valid)) ./ ...
+    (sind(theta).^2 + k.^2 .* cosd(theta).^2) ...
+    );
 
-    sy(valid) = (lambda/(4*pi)) .* ...
-        sqrt( ...
-        -2 .* log(gamma_temporal(valid)) ./ ...
-        (sind(theta).^2 + k(i).^2 .* cosd(theta).^2) ...
-        );
+sz(valid) = k .* sy(valid);
 
-    sz(valid) = k(i) .* sy(valid);
-
-    % Horizontal displacement spread
-    plot(t_days, sy, '-', ...
-        'Color', colors(i,:), ...
-        'LineWidth', 2, ...
-        'DisplayName', sprintf('s_y, k = %.2f', k(i)));
-
-    % Vertical displacement spread
-    plot(t_days, sz, '--', ...
-        'Color', colors(i,:), ...
-        'LineWidth', 2, ...
-        'DisplayName', sprintf('s_z, k = %.2f', k(i)));
-
-end
+% Horizontal displacement spread
+plot(t_days, sy, '-', ...
+    'LineWidth', 2);
 
 xline(6, 'k:', 'Complete decorrelation', ...
     'HandleVisibility', 'off');
@@ -146,7 +65,6 @@ ylabel('RMS Scatterer Displacement (m)');
 title('Scatterer Displacement for Linear Coherence Decay');
 
 xlim([0 6]);
-legend('Location', 'northwest');
 
 %% Temporal coherence vs horizontal RMS scatterer displacement
 % Assumption: sz = k*sy
@@ -184,39 +102,13 @@ xlim([0 max(sy)]);
 ylim([0 1]);
 
 legend('Location','northeast');
+%% function for calculating sigma_z
+L = 100; 
+lambda = c/f;
+dphi = 1; 
+NESZ_dB = -20; 
+sigma0_dB = -10;
+b_perp = 100; 
+time = 12*3600; % seconds
 
-gamma_temporal = 0.9; % guess
-%% Thermal coherence
-% we can assume that gamma ~ 1 for SNR >> 1
-% -15 dB for noise equivalent sigma zero
-% estiamte something for sigma naught
-
-SNR = 30; % complete guess, can't find the value
-gamma_thermal = SNR / (SNR + 1);
-
-%% spatial coherence
-b_perp = 100; % perpendicular component to baseline vector (m)
-R = altitude / cosd(theta); % slant range (m)
-
-Bc = (lambda * R) / (2*ry * cosd(theta));
-gamma_spatial = 1 - (2*b_perp*ry*cosd(theta) / (lambda*R));
-
-%% rotational coherence
-dphi_deg = 5; % difference in heading directions
-dphi = deg2rad(dphi_deg);
-
-dphi_c = rad2deg(lambda / (2*rx * sind(theta))); % maximum heading difference allowed
-gamma_rotation = 1 - (2*rx*dphi*sind(theta))/lambda; % rotational coherence
-
-
-%% total coherence
-
-gamma = gamma_thermal * gamma_spatial * gamma_rotation * gamma_temporal; % total coherence
-
-% L = 1 can be the lower bound, but need to determine the number of pixels
-% system averages over (based on processing setup
-L = 100; % number of looks (need to figure out)
-
-sigma_phi = (sqrt(1-gamma^2) / (gamma * sqrt(2*L)));
-sigma_z = (lambda/(4*pi*cosd(theta))) * sigma_phi;
-
+estimate_insar_uncertainty(L, lambda, dphi, NESZ_dB, sigma0_dB, b_perp, time)
