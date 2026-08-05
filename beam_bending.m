@@ -36,9 +36,10 @@ sigma_z = 0.002;  % m (vertical displacement uncertainty)
 I = h^3/12;
 mu = 0.325; % poisson's ratio
 E = 9.33e9; % Pa
+D = (E*I)/(1-mu^2); % flexural rigidity
 
 % parameters for viscous beam bending
-T_hours = 12;            % Tidal period (hours), M2 example
+T_hours = 24;            % Tidal period (hours), M2 example
 T = T_hours*3600;           % Tidal period (s)
 omega = 2*pi/T;             % Angular frequency (rad/s)
 
@@ -58,11 +59,10 @@ x_km = x/1000;
 lambda = (rho*g*(1-mu^2)/(4*E*I))^(1/4);
 min_L = 5*pi/(4*lambda); % minimum ice shelf length for elastic estimation to make sense (according to Holdsworth)
 w = w0 * (1 - (exp(-lambda*x) .* (cos(lambda*x) + sin(lambda*x))));
-
 %% solving viscous profile
 
 % calculate beta 
-beta = (rho_w*g/(omega*Dv))^(1/4);
+beta = (rho*g/(omega*Dv))^(1/4);
 
 % Characteristic viscous flexural length
 ell_v = 1/beta;
@@ -168,4 +168,91 @@ set(gca, 'FontSize', 12, 'LineWidth', 1);
 
 % figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/beam_bending';
 % exportgraphics(gcf, fullfile(figure_dir,'elastic_viscous_beam_bending_thwaites.jpg'), ...
+% 'Resolution',300);
+
+%% plotting curvature at peak tide
+
+% analytically solved elastic curvature
+elastic_curvature = 2*w0*lambda^2 * exp(-lambda*x) .* (cos(lambda*x) - sin(lambda*x));
+
+% viscous curvature
+viscous_slope = gradient(w_peak, x);          % dw/dx
+viscous_curvature = gradient(viscous_slope, x);  % d^2w/dx^2
+
+figure;
+hold on;
+plot(x_km, viscous_curvature, 'LineWidth', 2);
+plot(x_km,elastic_curvature, 'LineWidth', 2);
+
+xlabel('Distance from grounding line (km)');
+ylabel('Curvature, $d^2w/dx^2 (m^{-1})$', 'Interpreter', 'latex');
+title('Curvature at peak tide');
+
+yline(0, 'k--');
+xlim([0, L/1000]);
+
+legend('elastic','viscous')
+grid on;
+box on;
+set(gca, 'FontSize', 12, 'LineWidth', 1);
+
+
+% figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/beam_bending';
+% exportgraphics(gcf, fullfile(figure_dir,'beam_curvature.jpg'), ...
+% 'Resolution',300);
+
+%% Deflection at lf
+
+% flexural wave-length (features smaller than lf are support by rigidity,
+% features larger than lf are at isostatic equilibrium)
+lf = (4*D/(rho*g))^(1/4);
+
+% Find closest grid point
+[~,idx] = min(abs(x-lf));
+
+% Time vector (two tidal cycles)
+Nt = 500;
+t = linspace(0,2*T,Nt);
+
+% Initialize
+w_lf = zeros(size(t));
+
+% Displacement at x = lf
+for i = 1:Nt
+
+    % Instantaneous displacement profile
+    w = imag(W .* exp(1i*omega*t(i)));
+
+    % Record displacement at x = lf
+    w_lf(i) = w(idx);
+
+end
+
+% Applied tidal forcing
+w_tide = w0*sin(omega*t);
+
+% Plot
+figure;
+hold on;
+
+plot(t/3600, w_lf, 'LineWidth', 2, ...
+    'DisplayName','viscous');
+
+plot(t/3600, w_tide, '--k', 'LineWidth', 2, ...
+    'DisplayName','$w_{tide}$');
+
+xlabel('Time (hours)');
+ylabel('Vertical displacement (m)');
+title(sprintf('Response at $x=\\ell_f = %.2f$ km', lf/1000), ...
+    'Interpreter','latex');
+
+legend('Interpreter','latex','Location','best');
+
+grid on;
+box on;
+set(gca,'FontSize',12,'LineWidth',1);
+
+
+% figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/beam_bending';
+% exportgraphics(gcf, fullfile(figure_dir,'viscous_phase_lag.jpg'), ...
 % 'Resolution',300);

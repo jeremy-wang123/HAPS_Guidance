@@ -28,7 +28,7 @@ w0 = mean_amp; % m
 sigma_z = 0.002;  % m (vertical displacement uncertainty)
 
 % parameters for viscous beam bending
-T_hours = 12;            % Tidal period (hours), M2 example
+T_hours = 24;            % Tidal period (hours), M2 example
 T = T_hours*3600;           % Tidal period (s)
 omega = 2*pi/T;             % Angular frequency (rad/s)
 
@@ -157,6 +157,7 @@ phases_deg(end) = [];
 
 % Generate a 256-color twilight colormap
 cmap = slanCM('twilight_s',256);
+nColors = size(cmap,1);
 
 % Apply to current axes
 colormap(gca, cmap);
@@ -226,3 +227,10 @@ cb.TickLabels = {'0^\circ','90^\circ','180^\circ', ...
 grid on;
 box on;
 set(gca, 'FontSize', 12, 'LineWidth', 1);
+
+% 
+% figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/beam_bending';
+% exportgraphics(gcf, fullfile(figure_dir,'viscous_tidal_phases.jpg'), ...
+% 'Resolution',300);
+
+%% 
