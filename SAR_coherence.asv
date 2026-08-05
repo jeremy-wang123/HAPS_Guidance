@@ -108,13 +108,12 @@ lambda = c/f; % meters
 baseline.L         = 20;
 baseline.lambda    = lambda;      % m
 baseline.dphi      = 5;         % degrees
-baseline.NESZ_dB   = -25;       % dB (-25 to -35 dB)
+baseline.NESZ_dB   = -20;       % dB (
 baseline.sigma0_dB = -15;       % dB (generally ranges from -5 to -15)
 baseline.b_perp    = 200;       % m
 baseline.time      = 12*3600;   % seconds
 
 uncertainty = estimate_insar_uncertainty(baseline.L, baseline.lambda, baseline.dphi, baseline.NESZ_dB, baseline.sigma0_dB,baseline.b_perp,baseline.time)
-
 
 
 %% Sobol sensitivity analysis using the SAFE Toolbox

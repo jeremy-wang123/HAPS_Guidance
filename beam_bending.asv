@@ -258,5 +258,3 @@ set(gca,'FontSize',12,'LineWidth',1);
 % 'Resolution',300);
 
 %% Critical Tidal Amplitude
-e_bg = h*w0*omega/lf^2; % background bending strain rate
-w0_star = e_bg 

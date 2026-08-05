@@ -141,17 +141,10 @@ sigma_phi(valid) = ...
 %
 % sigma_z = lambda/(4*pi*cos(theta))*sigma_phi
 
-sigma_los = NaN(size(sigma_phi));
-sigma_los(valid) = ...
-    (lambda / (4 * pi)) .* sigma_phi(valid);
-
 sigma_z = NaN(size(sigma_phi));
+
 sigma_z(valid) = ...
     (lambda / (4 * pi * cosd(theta))) .* sigma_phi(valid);
-
-sigma_horizontal = NaN(size(sigma_phi));
-sigma_horizontal(valid) = ...
-    (lambda / (4 * pi * sind(theta))) .* sigma_phi(valid); 
 
 %% Store outputs
 
@@ -166,7 +159,6 @@ results.gamma_total = gamma_total;
 results.sigma_phi = sigma_phi;
 results.sigma_z = sigma_z;
 results.sigma_los = sigma_los;
-results.sigma_horizontal = sigma_horizontal;
 
 % Useful intermediate quantities
 results.theta = theta;
