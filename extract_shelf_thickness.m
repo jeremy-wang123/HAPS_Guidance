@@ -1,4 +1,4 @@
-function [h_shelf_mean,h_shelf_eff,h_front_mean,h_front_eff] = extract_shelf_thickness(region)
+function [h_shelf_mean,h_shelf_eff,h_front_mean,h_front_eff, h_calving_front] = extract_shelf_thickness(region)
 %EXTRACT_SHELF_THICKNESS extracts the mean thickness and calving front thickness of a
 %given ice shelf
 %   Calving front thickness averaged across data points within 5 km of the
@@ -9,6 +9,7 @@ function [h_shelf_mean,h_shelf_eff,h_front_mean,h_front_eff] = extract_shelf_thi
 %   - h_shelf_eff: rigidity equivalent mean thickness
 %   - h_front_mean: average thickness of region within 5km of calving front
 %   - h_front_eff: rigidity equivalent thickness of calving front
+%   - h_calving_front: calving front average
 %   Data set from Bedmachine (Morlighem et al. 2017)
 
 addpath('/Users/jeremywang/Documents/MATLAB/BedMachine');
@@ -80,6 +81,10 @@ if ~any(calving_front(:))
         'Check the Thwaites mask and BedMachine mask.']);
 end
 
+% Mean thickness at the actual calving front
+H_front = H(calving_front);
+mean_calving = mean(H_front, 'omitnan');
+
 %%% Distance inland from the calving front
 % bwdist returns Euclidean distance in pixel units.
 % Multiply by the physical grid spacing to obtain meters.
@@ -105,3 +110,4 @@ h_shelf_eff = mean(H_shelf.^3,'omitnan')^(1/3);
 
 h_front_mean = mean(H_near_front,'omitnan');
 h_front_eff = mean(H_near_front.^3,'omitnan')^(1/3);
+h_calving_front = mean_calving;
