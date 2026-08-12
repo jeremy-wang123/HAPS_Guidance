@@ -40,7 +40,7 @@ axis equal
 
 %% Quiver plot for Thwaites
 figure
-mapzoomps('Thwaites Glacier')
+mapzoomps('Pine Island Glacier')
 measuresps('speed','log','alpha',0.7)
 cb = colorbar;
 cb.Ticks = [0 1 2 3];

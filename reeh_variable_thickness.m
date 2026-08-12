@@ -51,7 +51,7 @@ floating = bm_mask == 3;
 inside_region = inpolygon(xgrid,ygrid,wx,wy);
 
 % Define the Thwaites floating shelf
-thwaites_shelf = ...
+shelf = ...
     inside_region & ...
     floating & ...
     isfinite(H);
@@ -64,7 +64,7 @@ ocean_neighbors = conv2( ...
     'same') > 0;
 
 calving_front = ...
-    thwaites_shelf & ocean_neighbors;
+    shelf & ocean_neighbors;
 
 
 % Grounding line
@@ -78,7 +78,7 @@ grounded_neighbors = conv2( ...
 
 % Floating shelf cells adjacent to grounded ice
 grounding_line = ...
-    thwaites_shelf & grounded_neighbors;
+    shelf & grounded_neighbors;
 
 % Coordinates of front cells
 x_front = xgrid(calving_front);
@@ -146,7 +146,7 @@ for i = 1:n_transects
         inside_test = interp2( ...
             xgrid, ...
             ygrid, ...
-            double(thwaites_shelf), ...
+            double(shelf), ...
             x_test, ...
             y_test, ...
             'nearest', ...
@@ -255,7 +255,7 @@ L_mean = mean( ...
 
 % Create full shelf thickness map
 H_shelf_map = H;
-H_shelf_map(~thwaites_shelf) = NaN;
+H_shelf_map(~shelf) = NaN;
 
 figure;
 hold on;
@@ -278,32 +278,49 @@ for i = 1:n_transects
     plot( ...
         [x_gl_match(i), x_front(i)], ...
         [y_gl_match(i), y_front(i)], ...
-        'k-', ...
+        '-', ...
+        'Color', [0 0 0 0.3], ...   % black, 30% opacity
         'LineWidth', 0.5, ...
         'HandleVisibility', 'off');
 end
 
 % Detected grounding-line points
-scatter( ...
+gl_handles = scatter( ...
     x_gl, y_gl, ...
     10, 'k', 'filled', ...
     'DisplayName', 'Grounding line');
 
 % Detected calving-front points
-scatter( ...
+calving_handles = scatter( ...
     x_front, y_front, ...
     10, 'r', 'filled', ...
     'DisplayName', 'Calving front');
 
 axis equal;
-axis tight;
+
+% Find coordinates containing valid shelf data
+valid_shelf = isfinite(H_shelf_map);
+
+x_valid = xgrid(valid_shelf);
+y_valid = ygrid(valid_shelf);
+
+% Add small padding
+padding = 5e3;   % km
+
+xlim([min(x_valid) - padding, ...
+      max(x_valid) + padding]);
+
+ylim([min(y_valid) - padding, ...
+      max(y_valid) + padding]);
+box on;
+
 
 xlabel('Polar stereographic x (m)');
 ylabel('Polar stereographic y (m)');
 
 title('Shelf-Constrained GL-to-Calving-Front Transects');
 
-legend('Location','southwest');
+legend([gl_handles, calving_handles], 'Location','southwest');
 %% Determine settling time of all transects
 
 parameters.rho_w    = rho_w;
@@ -346,21 +363,26 @@ for i = 1:n_transects
         L_i, ...
         x_i, ...
         p);
-
+    
     % Settling distance
-    viscoelastic_settling(i) = ...
-        calculate_settling_distance( ...
-            u_i, ...
-            x_i, ...
-            w0, ...
-            sigma_z);
+    settling_i = calculate_settling_distance( ...
+        u_i, ...
+        x_i, ...
+        w0, ...
+        sigma_z); % km
+    
+    % If settling distance is not reached within the beam,
+    % use the full beam length
+    if ~isfinite(settling_i) || settling_i > L_i
+        settling_i = L_i/1e3; % km
+    end
+
+    viscoelastic_settling(i) = settling_i;
 end
-
-
 %% Convert settling distances to map coordinates
 
 settling_fraction = ...
-    viscoelastic_settling ./ distance_to_gl(:);
+    viscoelastic_settling*1e3 ./ distance_to_gl(:);
 
 % Only physically valid values
 valid = ...
@@ -394,37 +416,181 @@ cb = colorbar;
 cb.Label.String = 'Ice thickness (m)';
 
 % Grounding line
-plot( ...
+h_gl_plot = plot( ...
     x_gl/1e3, ...
     y_gl/1e3, ...
     'k.', ...
     'DisplayName','Grounding line');
 
 % Calving front
-plot( ...
+h_front_plot = plot( ...
     x_front/1e3, ...
     y_front/1e3, ...
     'r.', ...
     'DisplayName','Calving front');
 
+% Plot ALL valid transects
+for i = 1:n_transects
+    if ~isfinite(distance_to_gl(i))
+        continue
+    end
+
+    plot( ...
+        [x_gl_match(i), x_front(i)]/1e3, ...
+        [y_gl_match(i), y_front(i)]/1e3, ...
+        'k-', ...
+        'Color', [0 0 0 0.2], ...   % black, 30% opacity
+        'LineWidth', 0.5, ...
+        'HandleVisibility', 'off');
+end
+
+% Valid settling points
+x_set = x_settle(valid);
+y_set = y_settle(valid);
+
+% Approximate Thwaites bad-point coordinates [x, y] in km
+bad_points_km = [
+    -1571.42, -433.159
+    -1541.47, -462.574
+    -1541.16, -462.874
+    -1541.13, -462.946
+];
+
+bad_points = bad_points_km * 1e3;
+bad_idx = knnsearch( ...
+    [x_set(:), y_set(:)], ...
+    bad_points);
+bad_idx = unique(bad_idx);
+
+% Print what is being removed
+fprintf('Removing settling points:\n');
+
+for i = 1:numel(bad_idx)
+    fprintf('  index %d: (%.3f, %.3f) km\n', ...
+        bad_idx(i), ...
+        x_set(bad_idx(i))/1e3, ...
+        y_set(bad_idx(i))/1e3);
+end
+
+% Remove bad points
+x_set(bad_idx) = [];
+y_set(bad_idx) = [];
+
+n_set = numel(x_set);
+
+% Order settling points by nearest-neighbor walking
+
+% Start at one extreme point
+[~, start_idx] = max(x_set);
+
+order = NaN(n_set,1);
+used = false(n_set,1);
+
+order(1) = start_idx;
+used(start_idx) = true;
+
+for k = 2:n_set
+
+    current_idx = order(k-1);
+
+    % Distance from current point to all settling points
+    dx = x_set - x_set(current_idx);
+    dy = y_set - y_set(current_idx);
+
+    dist = hypot(dx,dy);
+
+    % Don't revisit points
+    dist(used) = Inf;
+
+    % Find nearest unused point
+    [~, next_idx] = min(dist);
+
+    order(k) = next_idx;
+    used(next_idx) = true;
+end
+
+% Reorder settling points
+x_set_ordered = x_set(order);
+y_set_ordered = y_set(order);
+
+% Distance between successive settling points
+d_set = hypot( ...
+    diff(x_set_ordered), ...
+    diff(y_set_ordered));
+
+% Break connection if settling points are too far apart
+max_gap = 20e3;   %
+
+x_plot = x_set_ordered;
+y_plot = y_set_ordered;
+
+break_idx = find(d_set > max_gap);
+
+for k = fliplr(break_idx(:)')
+
+    x_plot = [ ...
+        x_plot(1:k); ...
+        NaN; ...
+        x_plot(k+1:end)];
+
+    y_plot = [ ...
+        y_plot(1:k); ...
+        NaN; ...
+        y_plot(k+1:end)];
+end
+
+plot( ...
+    x_plot/1e3, ...
+    y_plot/1e3, ...
+    '-', ...
+    'Color', [1 0.5 0], ...
+    'LineWidth', 2, ...
+    'DisplayName', 'Viscoelastic settling boundary');
+
+
+
 % Settling points
-scatter( ...
+h_settle = scatter( ...
     x_settle(valid)/1e3, ...
     y_settle(valid)/1e3, ...
-    25, ...
+    10, ...
+    [1 0.5 0], ...
     'filled', ...
     'DisplayName','Viscoelastic settling distance');
 
-axis equal tight;
+axis equal;
+
+% Find coordinates containing valid shelf data
+valid_shelf = isfinite(H_shelf_map);
+
+x_valid = xgrid(valid_shelf)/1e3;
+y_valid = ygrid(valid_shelf)/1e3;
+
+% Add small padding
+padding = 5;   % km
+
+xlim([min(x_valid) - padding, ...
+      max(x_valid) + padding]);
+
+ylim([min(y_valid) - padding, ...
+      max(y_valid) + padding]);
 box on;
 
 xlabel('x (km)');
 ylabel('y (km)');
 
-title('Thwaites Viscoelastic Settling Distance');
+title('Thwaites Viscoelastic ROI');
 
-legend('Location','best');
+legend( ...
+    [h_gl_plot, h_front_plot, h_settle], ...
+    'Location','southwest');
 
+figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/beam_bending/variable_thickness';
+if ~exist(figure_dir, 'dir')
+    mkdir(figure_dir);
+end
+exportgraphics(gcf, fullfile(figure_dir,'thwaites_viscoelastic_roi.jpg'), ...
+'Resolution',300);
 
 %% theoretical thickness profile
 % Thickness profile parameters
@@ -504,8 +670,8 @@ figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech
 if ~exist(figure_dir, 'dir')
     mkdir(figure_dir);
 end
-exportgraphics(gcf, fullfile(figure_dir,'elastic_thickness_profiles.jpg'), ...
-'Resolution',300);
+% exportgraphics(gcf, fullfile(figure_dir,'elastic_thickness_profiles.jpg'), ...
+% 'Resolution',300);
 
 %% creating thickness profiles
 x = linspace(0, L, 1000);
@@ -706,8 +872,8 @@ figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech
 if ~exist(figure_dir, 'dir')
     mkdir(figure_dir);
 end
-exportgraphics(gcf, fullfile(figure_dir,'elastic_thickness_comparison.jpg'), ...
-'Resolution',300);
+% exportgraphics(gcf, fullfile(figure_dir,'elastic_thickness_comparison.jpg'), ...
+% 'Resolution',300);
 
 %% viscous beam thickness comparison
 viscous_uniform = viscous_beam_profile(L, x, uniform_parameters);
@@ -830,8 +996,8 @@ figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech
 if ~exist(figure_dir, 'dir')
     mkdir(figure_dir);
 end
-exportgraphics(gcf, fullfile(figure_dir,'viscous_thickness_comparison.jpg'), ...
-'Resolution',300);
+% exportgraphics(gcf, fullfile(figure_dir,'viscous_thickness_comparison.jpg'), ...
+% 'Resolution',300);
 
 %% viscoelastic beam thickness comparison
 ve_uniform = viscoelastic_beam_profile(L, x, uniform_parameters);
@@ -954,8 +1120,8 @@ figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech
 if ~exist(figure_dir, 'dir')
     mkdir(figure_dir);
 end
-exportgraphics(gcf, fullfile(figure_dir,'viscoelastic_thickness_comparison.jpg'), ...
-'Resolution',300);
+% exportgraphics(gcf, fullfile(figure_dir,'viscoelastic_thickness_comparison.jpg'), ...
+% 'Resolution',300);
 
 %% Comparisons between elastic, viscous, and viscoelastic
 % Plot displacement for elastic
@@ -1044,8 +1210,8 @@ figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech
 if ~exist(figure_dir, 'dir')
     mkdir(figure_dir);
 end
-exportgraphics(gcf, fullfile(figure_dir,'rheology_comparison.jpg'), ...
-'Resolution',300);
+% exportgraphics(gcf, fullfile(figure_dir,'rheology_comparison.jpg'), ...
+% 'Resolution',300);
 %% Local functions for elastic beam
 
 function w_elastic = elastic_beam_profile(L, x, parameters)
