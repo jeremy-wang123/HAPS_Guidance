@@ -83,8 +83,7 @@ SNR_dB = sigma0_dB - NESZ_dB;
 SNR = 10^(SNR_dB/10);
 
 % SNR must be in linear units
-gamma_thermal = SNR / (SNR + 1);
-
+gamma_thermal = SNR / (SNR + 1)he==
 %% Spatial coherence
 
 % Critical perpendicular baseline
