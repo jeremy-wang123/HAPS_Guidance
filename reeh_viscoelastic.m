@@ -144,8 +144,8 @@ x = linspace(0, L, 1000);
 Y = deval(sol, x);
 x_km = x/1e3;
 
-us      = Y(1,:);
-uc      = Y(2,:);
+us_ve      = Y(1,:);
+uc_ve      = Y(2,:);
 alpha_s = Y(3,:);
 alpha_c = Y(4,:);
 Qs      = Y(5,:);
@@ -153,17 +153,17 @@ Qc      = Y(6,:);
 Ms      = Y(7,:);
 Mc      = Y(8,:);
 
-displacement_amplitude = hypot(us, uc);
+displacement_amplitude = hypot(us_ve, uc_ve);
 tilt_amplitude = hypot(alpha_s, alpha_c);
 
-displacement_phase = atan2d(uc, us);
+displacement_phase = atan2d(uc_ve, us_ve);
 tilt_phase = atan2d(alpha_c, alpha_s);
 
 t_peak = T/4;
 
 u_viscoelastic_peak = ...
-    us .* sin(omega*t_peak) + ...
-    uc .* cos(omega*t_peak);
+    us_ve .* sin(omega*t_peak) + ...
+    uc_ve .* cos(omega*t_peak);
 
 %% Viscous response
 % Beam geometry
@@ -291,9 +291,9 @@ xlabel('Distance from grounding line (km)');
 ylabel('Vertical displacement (m)');
 title('Displacement Profile at Peak High Tide Numerical');
 legend('Location','southeast')
-
-exportgraphics(gcf, fullfile(figure_dir,'reeh_viscoelastic_thwaites.jpg'), ...
-'Resolution',300);
+% 
+% exportgraphics(gcf, fullfile(figure_dir,'reeh_viscoelastic_thwaites.jpg'), ...
+% 'Resolution',300);
 
 
 %% time series plot for one cycle (viscoelastic)
@@ -330,9 +330,9 @@ for j = 1:nPhases
     t = (phase_deg/360)*T
     
     % instantaneous displacement profile
-    w = ...
-        us .* sin(omega*t) + ...
-        uc .* cos(omega*t);
+    w_ve = ...
+        us_ve .* sin(omega*t) + ...
+        uc_ve .* cos(omega*t);
 
 
     % Select the line color from the continuous colormap
@@ -340,11 +340,11 @@ for j = 1:nPhases
     color_index = 1 + round(color_position*(nColors - 1));
     line_color = cmap(color_index,:);
 
-    plot(x_km, w, ...
+    plot(x_km, w_ve, ...
         'Color', line_color, ...
         'LineWidth', 2);
 
-    all_y_values = [all_y_values; w(:)];
+    all_y_values = [all_y_values; w_ve(:)];
 
 end
 
