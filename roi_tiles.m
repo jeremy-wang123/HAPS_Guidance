@@ -182,7 +182,12 @@ h_roi.HandleVisibility = 'off';
 colormap(gca, [1 0 0]);
 
 % Plot PCA flight path
-plot(x_pca, y_pca, 'b-', ...
+% plot(x_pca, y_pca, 'b-', ...
+%      'LineWidth', 3, ...
+%      'HandleVisibility', 'off');
+
+% Plot left border of SAR swath
+plot(x_left, y_left, 'b-', ...
      'LineWidth', 3, ...
      'HandleVisibility', 'off');
 
@@ -220,75 +225,106 @@ legend([h_roi_legend, h_gl_legend, h_pca_legend], ...
 % exportgraphics(gcf, fullfile(figure_dir,'Thwaites_PCA_singular.jpg'), ...
 % 'Resolution',300);
 
-% plotting parallel lines
+%% 
 figure;
 hold on;
-measuresps('gl', 'k');
+measuresps('gl','k');
 
-% Plot ROI overlay
+% ROI
 shade_layer = ones(size(sampling_zone));
 
-h_roi = imagesc(x_grid, y_grid, shade_layer);
-set(gca, 'YDir', 'normal');
+h_roi = imagesc(x_grid,y_grid,shade_layer);
+set(gca,'YDir','normal');
 
-h_roi.AlphaData = 0.5 * double(sampling_zone);
+h_roi.AlphaData = 0.5*double(sampling_zone);
 h_roi.AlphaDataMapping = 'none';
 h_roi.HandleVisibility = 'off';
 
-colormap(gca, [1 0 0]);
+colormap(gca,[1 0 0]);
 
-plot(x_pca, y_pca, 'b-', ...
-     'LineWidth', 3, ...
-     'HandleVisibility', 'off');
 
-h_pca = patch([x_left fliplr(x_right)], ...
-      [y_left fliplr(y_right)], ...
+% =================================================
+% CENTER SWATH
+% =================================================
+
+x_center = x_pca;
+y_center = y_pca;
+
+x_left_center = x_center + half_width*normal(1);
+y_left_center = y_center + half_width*normal(2);
+
+x_right_center = x_center - half_width*normal(1);
+y_right_center = y_center - half_width*normal(2);
+
+% Plot only left border
+plot(x_left_center,y_left_center,'b-', ...
+    'LineWidth',2, ...
+    'HandleVisibility','off');
+
+% Coverage
+patch([x_left_center fliplr(x_right_center)], ...
+      [y_left_center fliplr(y_right_center)], ...
       'c', ...
       'FaceAlpha',0.3, ...
       'EdgeColor','none', ...
-      'LineWidth',2);
+      'HandleVisibility','off');
 
-total_flight = line_length; 
 
-% Plot PCA flight path
-for i=1:1
-    x_offset = x_pca + S_range*i*normal(1);
-    y_offset = y_pca + S_range*i*normal(2);
-    
-    x_left  = x_offset + half_width*normal(1);
-    y_left  = y_offset + half_width*normal(2);
-    x_right = x_offset - half_width*normal(1);
-    y_right = y_offset - half_width*normal(2);
+% =================================================
+% POSITIVE OFFSET SWATH
+% =================================================
 
-    plot(x_offset, y_offset, 'b--', 'LineWidth', 2);
-    patch([x_left fliplr(x_right)], ...
-      [y_left fliplr(y_right)], ...
+x_center_pos = x_pca + S_range*normal(1);
+y_center_pos = y_pca + S_range*normal(2);
+
+x_left_pos = x_center_pos + half_width*normal(1);
+y_left_pos = y_center_pos + half_width*normal(2);
+
+x_right_pos = x_center_pos - half_width*normal(1);
+y_right_pos = y_center_pos - half_width*normal(2);
+
+% Left border
+plot(x_left_pos,y_left_pos,'b-', ...
+    'LineWidth',2, ...
+    'HandleVisibility','off');
+
+% Coverage
+patch([x_left_pos fliplr(x_right_pos)], ...
+      [y_left_pos fliplr(y_right_pos)], ...
       'c', ...
       'FaceAlpha',0.3, ...
       'EdgeColor','none', ...
-      'LineWidth',2);
-
-    x_offset = x_pca - S_range*i*normal(1);
-    y_offset = y_pca - S_range*i*normal(2);
-    
-    x_left  = x_offset + half_width*normal(1);
-    y_left  = y_offset + half_width*normal(2);
-    x_right = x_offset - half_width*normal(1);
-    y_right = y_offset - half_width*normal(2);
-    plot(x_offset, y_offset, 'b--', 'LineWidth', 2);
-    
-    patch([x_left fliplr(x_right)], ...
-        [y_left fliplr(y_right)], ...
-        'c', ...
-        'FaceAlpha',0.3, ...
-        'EdgeColor','none', ...
-        'LineWidth',2);
-
-    % total flight summed
-    total_flight = 2*line_length*i + 2*i*S_range;
-end
+      'HandleVisibility','off');
 
 
+% =================================================
+% NEGATIVE OFFSET SWATH
+% =================================================
+
+x_center_neg = x_pca - S_range*normal(1);
+y_center_neg = y_pca - S_range*normal(2);
+
+x_left_neg = x_center_neg + half_width*normal(1);
+y_left_neg = y_center_neg + half_width*normal(2);
+
+x_right_neg = x_center_neg - half_width*normal(1);
+y_right_neg = y_center_neg - half_width*normal(2);
+
+% Left border
+plot(x_left_neg,y_left_neg,'b-', ...
+    'LineWidth',2, ...
+    'HandleVisibility','off');
+
+% Coverage
+patch([x_left_neg fliplr(x_right_neg)], ...
+      [y_left_neg fliplr(y_right_neg)], ...
+      'c', ...
+      'FaceAlpha',0.3, ...
+      'EdgeColor','none', ...
+      'HandleVisibility','off');
+
+
+% Formatting
 axis image;
 xlim(x_limits);
 ylim(y_limits);
@@ -296,24 +332,25 @@ ylim(y_limits);
 xlabel('x (m)');
 ylabel('y (m)');
 
-% Create proxy objects solely for the legend
-h_roi_legend = patch(NaN, NaN, 'r', ...
-    'FaceAlpha', 0.35, ...
-    'EdgeColor', 'none');
 
-h_gl_legend = plot(NaN, NaN, 'k-', ...
-    'LineWidth', 1.5);
+% Legend proxies
+h_roi_legend = patch(NaN,NaN,'r', ...
+    'FaceAlpha',0.35, ...
+    'EdgeColor','none');
 
-h_pca_legend = plot(NaN, NaN, 'b-', ...
-    'LineWidth', 3);
+h_gl_legend = plot(NaN,NaN,'k-', ...
+    'LineWidth',1.5);
 
-legend([h_roi_legend, h_gl_legend, h_pca_legend], ...
-    {'ROI', 'Grounding Line', 'SAR Flight Coverage'}, ...
-    'Location', 'northeast');
+h_pca_legend = plot(NaN,NaN,'b-', ...
+    'LineWidth',3);
 
-% figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/roi_tiled_plots';
-% exportgraphics(gcf, fullfile(figure_dir,'Thwaites_PCA_parallel.jpg'), ...
-% 'Resolution',300);
+legend([h_roi_legend,h_gl_legend,h_pca_legend], ...
+    {'ROI','Grounding Line','SAR Flight Path'}, ...
+    'Location','northeast');
+
+figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/roi_tiled_plots';
+exportgraphics(gcf, fullfile(figure_dir,'Thwaites_PCA_parallel.jpg'), ...
+'Resolution',300);
 
 %% Flight time and distance analysis
 % drone velocity

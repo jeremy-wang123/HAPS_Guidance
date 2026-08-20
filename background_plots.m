@@ -121,7 +121,7 @@ end
 
 
 %% plot K1 and O1 sinusoidal contributions, averaged around Thwaites (from paper)
-clear;clc;
+
 addpath('/Users/jeremywang/Documents/MATLAB/CATS2008') 
 Model = '/Users/jeremywang/Documents/MATLAB/CATS2008/Model_CATS2008'; 
 
@@ -258,7 +258,6 @@ uistack(ax1,'bottom')
 title(ax1,'CATS2008 K1 + O1 tidal amplitude over ice surface speed')
 
 %% Now recreate figure 1; K1 and O1 for all Antarctica
-clear;clc;
 
 addpath('/Users/jeremywang/Documents/MATLAB/CATS2008')
 Model = '/Users/jeremywang/Documents/MATLAB/CATS2008/Model_CATS2008';
@@ -431,7 +430,6 @@ uistack(ax1,'bottom')
 title(ax1,'CATS2008 tidal amplitude over ice surface speed')
 
 %% Calculate the beat frequency
-clear;clc;
 addpath('/Users/jeremywang/Documents/MATLAB/CATS2008') 
 Model = '/Users/jeremywang/Documents/MATLAB/CATS2008/Model_CATS2008'; 
 

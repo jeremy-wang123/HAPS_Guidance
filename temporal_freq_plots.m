@@ -195,7 +195,7 @@ shading(ax2,'flat')
 
 colormap(ax2, winter)
 cb2 = colorbar(ax2,'eastoutside');
-cb2.Label.String = 'Minimum Sampling Period (hours)';
+cb2.Label.String = 'Maximum Sampling Period (hours)';
 
 % Match axes exactly
 set(ax2, ...
@@ -215,6 +215,12 @@ linkaxes([ax1 ax2],'xy')
 uistack(ax1,'bottom')
 uistack(ax2,'top')
 
+figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/revisit_period_maps';
+if ~exist(figure_dir, 'dir')
+    mkdir(figure_dir);
+end
+exportgraphics(gcf, fullfile(figure_dir,'nyquist_periods.jpg'), ...
+'Resolution',300);
 %% Determine the campaign length
 % based on the top two amplitudes, calculate the beat frequency
 

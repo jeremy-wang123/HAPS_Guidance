@@ -1,6 +1,11 @@
 %% Variable thickness profiles
 clear;clc;
 
+figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/beam_bending/variable_thickness/PCA_profile/Presentation';
+if ~exist(figure_dir, 'dir')
+    mkdir(figure_dir);
+end
+
 %% Parameter values
 mean_amp = calculate_mean_amp('Thwaites', 'top2');
 
@@ -20,7 +25,8 @@ mu_v = 600e9; % elastic viscosity GPa
 T = 12*3600;
 omega = 2*pi/T;
 
-%% Thickness profiles and transects
+
+%% Import bed machine
 addpath('/Users/jeremywang/Documents/MATLAB/BedMachine');
 
 grid_spacing_km = 1;
@@ -43,48 +49,169 @@ bm_mask = bedmachine_interp( ...
     'method', ...
     'nearest');
 
-ocean = bm_mask == 0;
+%% Manually create idealistic Thwaites shelf
+
+% Identify ocean, floating ice, and grounded ice
+ocean    = bm_mask == 0;
 floating = bm_mask == 3;
+grounded = bm_mask == 2;
 
-% Get Thwaites shelf outline
+% Thwaites outline
 [wx,wy] = antbounds_data('Thwaites','xy');
-inside_region = inpolygon(xgrid,ygrid,wx,wy);
 
-% Define the Thwaites floating shelf
+inside_region = inpolygon( ...
+    xgrid, ...
+    ygrid, ...
+    wx, ...
+    wy);
+
+% Initial floating shelf
 shelf = ...
     inside_region & ...
     floating & ...
     isfinite(H);
 
-% Calving front
-% Floating shelf cells adjacent to ocean
+% ---------------------------------------------------------
+% 1. Identify the REAL ocean
+%
+% Only ocean connected to the edge of the domain is considered
+% the external ocean. This removes internal ocean holes from
+% being labeled as calving fronts.
+% ----------------------------------------------------------
+
+CC_ocean = bwconncomp(ocean, 8);
+
+external_ocean = false(size(ocean));
+
+[nrows,ncols] = size(ocean);
+
+for k = 1:CC_ocean.NumObjects
+
+    inds = CC_ocean.PixelIdxList{k};
+
+    [r,c] = ind2sub(size(ocean), inds);
+
+    % Does this ocean component touch the edge of the domain?
+    touches_edge = ...
+        any(r == 1)     || ...
+        any(r == nrows) || ...
+        any(c == 1)     || ...
+        any(c == ncols);
+
+    if touches_edge
+        external_ocean(inds) = true;
+    end
+
+end
+
+% ---------------------------------------------------------
+% 2. Identify main grounded ice versus grounded islands
+%
+% Main Antarctic grounded ice should connect to the edge of
+% the computational domain.
+%
+% Any isolated grounded component is interpreted as an island.
+% ----------------------------------------------------------
+
+% Classify grounded components
+
+CC_grounded = bwconncomp(grounded, 8);
+
+main_grounded = false(size(grounded));
+open_ocean_island = false(size(grounded));
+
+[nrows,ncols] = size(grounded);
+
+% Cells adjacent to external ocean
+external_ocean_neighbors = conv2( ...
+    double(external_ocean), ...
+    ones(3), ...
+    'same') > 0;
+
+for k = 1:CC_grounded.NumObjects
+
+    inds = CC_grounded.PixelIdxList{k};
+
+    [r,c] = ind2sub(size(grounded), inds);
+
+    % Mainland grounded ice:
+    % connected to edge of computational domain
+    touches_domain_edge = ...
+        any(r == 1)     || ...
+        any(r == nrows) || ...
+        any(c == 1)     || ...
+        any(c == ncols);
+
+    % Does this grounded component touch the true external ocean?
+    touches_external_ocean = ...
+        any(external_ocean_neighbors(inds));
+
+    if touches_domain_edge
+
+        % Main grounded continent
+        main_grounded(inds) = true;
+
+    elseif touches_external_ocean
+
+        % Grounded feature on the ocean-facing side:
+        % treat as part of the calving-front side
+        open_ocean_island(inds) = true;
+
+    end
+
+    % Otherwise:
+    % fully enclosed grounded island -> ignored entirely
+
+end
+
+% ---------------------------------------------------------
+% 3. Treat grounded islands like ocean
+% ----------------------------------------------------------
+
+effective_ocean = ...
+    external_ocean | ...
+    open_ocean_island;
+
+% ---------------------------------------------------------
+% 4. Calving front
+%
+% Floating shelf cells adjacent to either:
+%   - true external ocean
+%   - grounded islands
+% ----------------------------------------------------------
+
 ocean_neighbors = conv2( ...
-    double(ocean), ...
+    double(effective_ocean), ...
     ones(3), ...
     'same') > 0;
 
 calving_front = ...
-    shelf & ocean_neighbors;
+    shelf & ...
+    ocean_neighbors;
 
 
-% Grounding line
-grounded = bm_mask == 2;
+% ---------------------------------------------------------
+% 5. Grounding line
+%
+% ONLY shelf cells touching the main grounded ice.
+% Grounded islands therefore no longer produce GL points.
+% ----------------------------------------------------------
 
-% Cells having at least one grounded neighbor
 grounded_neighbors = conv2( ...
-    double(grounded), ...
+    double(main_grounded), ...
     ones(3), ...
     'same') > 0;
 
-% Floating shelf cells adjacent to grounded ice
 grounding_line = ...
-    shelf & grounded_neighbors;
+    shelf & ...
+    grounded_neighbors;
 
-% Coordinates of front cells
+
+% Coordinates
+
 x_front = xgrid(calving_front);
 y_front = ygrid(calving_front);
 
-% Coordinates of grounding-line cells
 x_gl = xgrid(grounding_line);
 y_gl = ygrid(grounding_line);
 
@@ -95,81 +222,160 @@ y_front = y_front(:);
 x_gl = x_gl(:);
 y_gl = y_gl(:);
 
+
+%% Perpendicular PCA approach 
+
+% ---------------------------------------------------------
+% PCA of grounding line
+% ----------------------------------------------------------
+
+GL = [x_gl, y_gl];
+
+% Center coordinates
+GL_mean = mean(GL,1);
+GL_centered = GL - GL_mean;
+
+% PCA
+[coeff, score, latent] = pca(GL);
+
+% First principal component = strike direction
+strike = coeff(:,1);
+
+% Make sure it is a unit vector
+strike = strike / norm(strike);
+
+% Perpendicular directions
+normal1 = [-strike(2); strike(1)];
+normal2 = -normal1;
+
+fprintf('Strike direction: [%.4f, %.4f]\n', ...
+    strike(1), strike(2));
+
+fprintf('Transect normal: [%.4f, %.4f]\n', ...
+    normal1(1), normal1(2));
+%% ---------------------------------------------------------
+% Generate PCA-normal transects from calving front to GL
+% ----------------------------------------------------------
+
+% Region that transects are allowed to cross
+%
+% Allow:
+%   - floating shelf
+%   - internal ocean holes
+%   - ignored internal grounded islands / mask holes
+%
+% Do NOT allow:
+%   - external ocean
+
+allowed_transect_region = ...
+    inside_region & ...
+    ~external_ocean;
+
 n_transects = numel(x_front);
 
-% Storage
 x_gl_match = NaN(n_transects,1);
 y_gl_match = NaN(n_transects,1);
 distance_to_gl = NaN(n_transects,1);
-idx_gl = NaN(n_transects,1);
 
-% How many nearest GL candidates to test initially
-K = min(100, numel(x_gl));
+% Search parameters
+ds = grid_spacing_m/4;     % search step
+L_max = 100e3;             % maximum search distance
+s = 0:ds:L_max;
 
-% Find K nearest GL points for every front point
-[idx_candidates, dist_candidates] = knnsearch( ...
-    [x_gl, y_gl], ...
-    [x_front, y_front], ...
-    'K', K);
-
+% Grounding-line lookup mask
+gl_mask = grounding_line;
 
 for i = 1:n_transects
 
-    % Current front point
     xf = x_front(i);
     yf = y_front(i);
 
-    % Test GL candidates from nearest to farther away
-    for j = 1:K
+    best_distance = Inf;
+    best_x = NaN;
+    best_y = NaN;
 
-        gl_idx = idx_candidates(i,j);
+    % Test both perpendicular directions
+    normals = [normal1, normal2];
 
-        xg = x_gl(gl_idx);
-        yg = y_gl(gl_idx);
+    for d = 1:2
 
-        % Straight-line distance
-        L_candidate = hypot(xf - xg, yf - yg);
+        nvec = normals(:,d);
 
-        % Number of samples along candidate transect
-        %
-        % Use spacing finer than the BedMachine grid so that
-        % we don't accidentally jump across a narrow ocean gap.
-        n_test = max( ...
-            2, ...
-            ceil(L_candidate/(grid_spacing_m/2)));
+        % Coordinates along ray
+        x_test = xf + s*nvec(1);
+        y_test = yf + s*nvec(2);
 
-        % Straight line GL -> front
-        x_test = linspace(xg, xf, n_test);
-        y_test = linspace(yg, yf, n_test);
+        % -------------------------------------------------
+        % First make sure ray does not cross external ocean
+        % -------------------------------------------------
 
-        % Determine whether every point is inside shelf
-        inside_test = interp2( ...
+        allowed = interp2( ...
             xgrid, ...
             ygrid, ...
-            double(shelf), ...
+            double(allowed_transect_region), ...
             x_test, ...
             y_test, ...
             'nearest', ...
             0);
 
-        % Accept this GL point only if the WHOLE straight line
-        % stays inside the floating shelf
-        if all(inside_test > 0.5)
+        % Find first invalid point
+        first_bad = find(allowed < 0.5, 1);
 
-            idx_gl(i) = gl_idx;
+        if isempty(first_bad)
+            last_valid = numel(s);
+        else
+            last_valid = first_bad - 1;
+        end
 
-            x_gl_match(i) = xg;
-            y_gl_match(i) = yg;
+        if last_valid < 1
+            continue
+        end
 
-            distance_to_gl(i) = L_candidate;
+        x_valid = x_test(1:last_valid);
+        y_valid = y_test(1:last_valid);
+        s_valid = s(1:last_valid);
 
-            break
+        % -------------------------------------------------
+        % Check for grounding-line intersection
+        % -------------------------------------------------
+
+        hits_gl = interp2( ...
+            xgrid, ...
+            ygrid, ...
+            double(gl_mask), ...
+            x_valid, ...
+            y_valid, ...
+            'nearest', ...
+            0);
+
+        hit_idx = find(hits_gl > 0.5, 1, 'first');
+
+        if ~isempty(hit_idx)
+
+            this_distance = s_valid(hit_idx);
+
+            if this_distance < best_distance
+
+                best_distance = this_distance;
+                best_x = x_valid(hit_idx);
+                best_y = y_valid(hit_idx);
+
+            end
+
         end
 
     end
 
-end
+    % Save result
+    if isfinite(best_distance)
 
+        x_gl_match(i) = best_x;
+        y_gl_match(i) = best_y;
+        distance_to_gl(i) = best_distance;
+
+    end
+
+end
 %% Build normalized thickness profile for each valid transect
 
 n_profile = 1000;
@@ -199,14 +405,23 @@ for i = 1:n_transects
         xi .* (y_front(i) - y_gl_match(i));
 
     % Sample BedMachine thickness along the transect
-    H_profiles(i,:) = interp2( ...
+    H_i = interp2( ...
         xgrid, ...
         ygrid, ...
         H, ...
         x_line, ...
         y_line, ...
         'linear');
+
+    % Interpolate across internal NaN gaps
+    H_i = fillmissing(H_i, 'linear');
+
+    % Store completed thickness profile
+    H_profiles(i,:) = H_i;
+
 end
+
+
 
 %% Summary thickness quantities
 
@@ -225,8 +440,7 @@ xi = linspace(0, 1, n_profile);
 % Only keep valid transects
 valid_transects = ...
     isfinite(distance_to_gl) & ...
-    distance_to_gl > 0 & ...
-    all(isfinite(H_profiles), 2);
+    distance_to_gl > 0;
 
 H_valid = H_profiles(valid_transects, :);
 
@@ -243,8 +457,8 @@ h_profile_median = median( ...
     'omitnan');
 
 % 25th and 75th percentiles
-h_p25 = prctile(H_valid, 25, 1);
-h_p75 = prctile(H_valid, 75, 1);
+h_p25 = prctile(H_valid, 25, 1, 'Method', 'exact');
+h_p75 = prctile(H_valid, 75, 1, 'Method', 'exact');
 
 % Mean shelf length
 L_mean = mean( ...
@@ -321,6 +535,7 @@ ylabel('Polar stereographic y (m)');
 title('Shelf-Constrained GL-to-Calving-Front Transects');
 
 legend([gl_handles, calving_handles], 'Location','southwest');
+
 %% Determine settling time of all transects
 
 parameters.rho_w    = rho_w;
@@ -338,6 +553,8 @@ n_transects = size(H_profiles, 1);
 viscoelastic_settling = NaN(n_transects, 1);
 elastic_settling = NaN(n_transects, 1);
 viscous_settling = NaN(n_transects, 1);
+maxwell_settling = NaN(n_transects, 1);
+
 
 for i = 1:n_transects
 
@@ -373,6 +590,10 @@ for i = 1:n_transects
         L_i, ...
         x_i, ...
         p);
+    maxwell_i = maxwell_beam_profile( ...
+        L_i, ...
+        x_i, ...
+        p);
     
     % Settling distance
     ve_settling_i = calculate_settling_distance( ...
@@ -390,22 +611,31 @@ for i = 1:n_transects
         x_i, ...
         w0, ...
         sigma_z); % km
+    maxwell_settling_i = calculate_settling_distance( ...
+        maxwell_i, ...
+        x_i, ...
+        w0, ...
+        sigma_z); % km
     
     % If settling distance is not reached within the beam,
     % use the full beam length
-    if ~isfinite(ve_settling_i) || ve_settling_i > L_i
+    if ~isfinite(ve_settling_i) || ve_settling_i > L_i/1e3
         ve_settling_i = L_i/1e3; % km
     end
-    if ~isfinite(elastic_settling_i) || elastic_settling_i > L_i
+    if ~isfinite(elastic_settling_i) || elastic_settling_i > L_i/1e3
         elastic_settling_i = L_i/1e3; % km
     end
-    if ~isfinite(viscous_settling_i) || viscous_settling_i > L_i
+    if ~isfinite(viscous_settling_i) || viscous_settling_i > L_i/1e3
         viscous_settling_i = L_i/1e3; % km
+    end
+    if ~isfinite(maxwell_settling_i) || maxwell_settling_i > L_i/1e3
+        maxwell_settling_i = L_i/1e3; % km
     end
 
     viscoelastic_settling(i) = ve_settling_i;
     elastic_settling(i) = elastic_settling_i;
     viscous_settling(i) = viscous_settling_i;
+    maxwell_settling(i) = maxwell_settling_i;
 end
 %% Convert settling distances to map coordinates
 [ve_x_settle, ve_y_settle, ve_valid] = map_settling_points( ...
@@ -414,6 +644,8 @@ end
     elastic_settling, distance_to_gl, x_gl_match, y_gl_match, x_front, y_front);
 [viscous_x_settle, viscous_y_settle, viscous_valid] = map_settling_points( ...
     viscous_settling, distance_to_gl, x_gl_match, y_gl_match, x_front, y_front);
+[maxwell_x_settle, maxwell_y_settle, maxwell_valid] = map_settling_points( ...
+    maxwell_settling, distance_to_gl, x_gl_match, y_gl_match, x_front, y_front);
 
 %% Plot settling-distance locations
 
@@ -456,112 +688,130 @@ for i = 1:n_transects
         'HandleVisibility', 'off');
 end
 
+% Connect settling points along PCA strike direction
+
 %{
-% Valid settling points
+% ---------------------------------------------------------
+% Viscoelastic
+% ---------------------------------------------------------
+
+valid = ve_valid & ...
+    isfinite(ve_x_settle) & ...
+    isfinite(ve_y_settle);
+
 x_set = ve_x_settle(valid);
-y_set = ve_x_settle(valid);
+y_set = ve_y_settle(valid);
 
-% Approximate Thwaites bad-point coordinates [x, y] in km
-bad_points_km = [
-    -1571.42, -433.159
-    -1541.47, -462.574
-    -1541.16, -462.874
-    -1541.13, -462.946
-];
+% Project points onto PCA strike direction
+s_strike = ...
+    x_set * strike(1) + ...
+    y_set * strike(2);
 
-bad_points = bad_points_km * 1e3;
-bad_idx = knnsearch( ...
-    [x_set(:), y_set(:)], ...
-    bad_points);
-bad_idx = unique(bad_idx);
+% Sort along strike
+[~, order] = sort(s_strike);
 
-% Print what is being removed
-fprintf('Removing settling points:\n');
+x_set = x_set(order);
+y_set = y_set(order);
 
-for i = 1:numel(bad_idx)
-    fprintf('  index %d: (%.3f, %.3f) km\n', ...
-        bad_idx(i), ...
-        x_set(bad_idx(i))/1e3, ...
-        y_set(bad_idx(i))/1e3);
-end
-
-% Remove bad points
-x_set(bad_idx) = [];
-y_set(bad_idx) = [];
-
-n_set = numel(x_set);
-
-% Order settling points by nearest-neighbor walking
-
-% Start at one extreme point
-[~, start_idx] = max(x_set);
-
-order = NaN(n_set,1);
-used = false(n_set,1);
-
-order(1) = start_idx;
-used(start_idx) = true;
-
-for k = 2:n_set
-
-    current_idx = order(k-1);
-
-    % Distance from current point to all settling points
-    dx = x_set - x_set(current_idx);
-    dy = y_set - y_set(current_idx);
-
-    dist = hypot(dx,dy);
-
-    % Don't revisit points
-    dist(used) = Inf;
-
-    % Find nearest unused point
-    [~, next_idx] = min(dist);
-
-    order(k) = next_idx;
-    used(next_idx) = true;
-end
-
-% Reorder settling points
-x_set_ordered = x_set(order);
-y_set_ordered = y_set(order);
-
-% Distance between successive settling points
-d_set = hypot( ...
-    diff(x_set_ordered), ...
-    diff(y_set_ordered));
-
-% Break connection if settling points are too far apart
-max_gap = 20e3;   %
-
-x_plot = x_set_ordered;
-y_plot = y_set_ordered;
-
-break_idx = find(d_set > max_gap);
-
-for k = fliplr(break_idx(:)')
-
-    x_plot = [ ...
-        x_plot(1:k); ...
-        NaN; ...
-        x_plot(k+1:end)];
-
-    y_plot = [ ...
-        y_plot(1:k); ...
-        NaN; ...
-        y_plot(k+1:end)];
-end
-
+% Connect points
 plot( ...
-    x_plot/1e3, ...
-    y_plot/1e3, ...
+    x_set/1e3, ...
+    y_set/1e3, ...
     '-', ...
     'Color', [1 0.5 0], ...
     'LineWidth', 2, ...
-    'DisplayName', 'Viscoelastic settling boundary');
-
+    'HandleVisibility', 'off');
 %}
 
+% ---------------------------------------------------------
+% Elastic
+% ---------------------------------------------------------
+
+valid = elastic_valid & ...
+    isfinite(elastic_x_settle) & ...
+    isfinite(elastic_y_settle);
+
+x_set = elastic_x_settle(valid);
+y_set = elastic_y_settle(valid);
+
+s_strike = ...
+    x_set * strike(1) + ...
+    y_set * strike(2);
+
+[~, order] = sort(s_strike);
+
+x_set = x_set(order);
+y_set = y_set(order);
+
+plot( ...
+    x_set/1e3, ...
+    y_set/1e3, ...
+    '-', ...
+    'Color', 'red', ...
+    'LineWidth', 2, ...
+    'HandleVisibility', 'off');
+
+
+% ---------------------------------------------------------
+% Viscous
+% ---------------------------------------------------------
+
+valid = viscous_valid & ...
+    isfinite(viscous_x_settle) & ...
+    isfinite(viscous_y_settle);
+
+x_set = viscous_x_settle(valid);
+y_set = viscous_y_settle(valid);
+
+s_strike = ...
+    x_set * strike(1) + ...
+    y_set * strike(2);
+
+[~, order] = sort(s_strike);
+
+x_set = x_set(order);
+y_set = y_set(order);
+
+plot( ...
+    x_set/1e3, ...
+    y_set/1e3, ...
+    '-', ...
+    'Color', 'green', ...
+    'LineWidth', 2, ...
+    'HandleVisibility', 'off');
+
+% ---------------------------------------------------------
+% Maxwell
+% ---------------------------------------------------------
+
+valid = maxwell_valid & ...
+    isfinite(maxwell_x_settle) & ...
+    isfinite(maxwell_y_settle);
+
+x_set = maxwell_x_settle(valid);
+y_set = maxwell_y_settle(valid);
+
+% Project points onto PCA strike direction
+s_strike = ...
+    x_set * strike(1) + ...
+    y_set * strike(2);
+
+% Sort along strike
+[~, order] = sort(s_strike);
+
+x_set = x_set(order);
+y_set = y_set(order);
+
+% Connect points
+plot( ...
+    x_set/1e3, ...
+    y_set/1e3, ...
+    '-', ...
+    'Color', '#E7298A', ...
+    'LineWidth', 2, ...
+    'HandleVisibility', 'off');
+
+%{
 % Settling points
 ve_settle = scatter( ...
     ve_x_settle(ve_valid)/1e3, ...
@@ -570,7 +820,7 @@ ve_settle = scatter( ...
     [1 0.5 0], ...
     'filled', ...
     'DisplayName','Viscoelastic settling distance');
-
+%}
 % Elastic points
 elastic_settle = scatter( ...
     elastic_x_settle(elastic_valid)/1e3, ...
@@ -580,6 +830,7 @@ elastic_settle = scatter( ...
     'filled', ...
     'DisplayName','Elastic settling distance');
 
+
 % viscous points
 viscous_settle = scatter( ...
     viscous_x_settle(viscous_valid)/1e3, ...
@@ -588,6 +839,16 @@ viscous_settle = scatter( ...
     'green', ...
     'filled', ...
     'DisplayName','Viscous settling distance');
+
+% Maxwell points
+maxwell_settle = scatter( ...
+    maxwell_x_settle(maxwell_valid)/1e3, ...
+    maxwell_y_settle(maxwell_valid)/1e3, ...
+    10, ...
+    'filled', ...
+    'MarkerFaceColor', '#E7298A', ...
+    'MarkerEdgeColor', '#E7298A', ...
+    'DisplayName', 'Maxwell settling distance');
 
 axis equal;
 
@@ -613,14 +874,14 @@ ylabel('y (km)');
 title('Thwaites ROI');
 
 legend( ...
-    [h_gl_plot, h_front_plot, ve_settle, elastic_settle, viscous_settle], ...
+    [h_gl_plot, h_front_plot, elastic_settle, viscous_settle, maxwell_settle], ...
     'Location','southwest');
 
-figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/beam_bending/variable_thickness';
+figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/beam_bending/variable_thickness/PCA_profile/Presentation';
 if ~exist(figure_dir, 'dir')
     mkdir(figure_dir);
 end
-exportgraphics(gcf, fullfile(figure_dir,'thwaites_roi_comparison.jpg'), ...
+exportgraphics(gcf, fullfile(figure_dir,'roi_rheology_comparison.jpg'), ...
 'Resolution',300);
 
 %% theoretical thickness profile
@@ -696,12 +957,12 @@ ylabel('Ice thickness (m)');
 title('Ice Thickness Profiles');
 set(gca, 'YDir', 'reverse');
 legend('Location','best');
-
-figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/beam_bending/variable_thickness';
-if ~exist(figure_dir, 'dir')
-    mkdir(figure_dir);
-end
-% exportgraphics(gcf, fullfile(figure_dir,'elastic_thickness_profiles.jpg'), ...
+% 
+% figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/beam_bending/variable_thickness/PCA_profile';
+% if ~exist(figure_dir, 'dir')
+%     mkdir(figure_dir);
+% end
+% exportgraphics(gcf, fullfile(figure_dir,'thickness_profiles.jpg'), ...
 % 'Resolution',300);
 
 %% creating thickness profiles
@@ -899,10 +1160,10 @@ title(sprintf('Elastic uniform thickness vs non-uniform: h front = %.0f m, h gl 
 legend('Location', 'southeast');
 
 
-figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/beam_bending/variable_thickness';
-if ~exist(figure_dir, 'dir')
-    mkdir(figure_dir);
-end
+% figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/beam_bending/variable_thickness';
+% if ~exist(figure_dir, 'dir')
+%     mkdir(figure_dir);
+% end
 % exportgraphics(gcf, fullfile(figure_dir,'elastic_thickness_comparison.jpg'), ...
 % 'Resolution',300);
 
@@ -1023,10 +1284,10 @@ title(sprintf('Viscous uniform thickness vs non-uniform: h front = %.0f m, h gl 
 legend('Location', 'southeast');
 
 
-figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/beam_bending/variable_thickness';
-if ~exist(figure_dir, 'dir')
-    mkdir(figure_dir);
-end
+% figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/beam_bending/variable_thickness';
+% if ~exist(figure_dir, 'dir')
+%     mkdir(figure_dir);
+% end
 % exportgraphics(gcf, fullfile(figure_dir,'viscous_thickness_comparison.jpg'), ...
 % 'Resolution',300);
 
@@ -1147,15 +1408,138 @@ title(sprintf('Viscoelastic uniform thickness vs non-uniform: h front = %.0f m, 
 legend('Location', 'southeast');
 
 
-figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/beam_bending/variable_thickness';
-if ~exist(figure_dir, 'dir')
-    mkdir(figure_dir);
-end
+% figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/beam_bending/variable_thickness';
+% if ~exist(figure_dir, 'dir')
+%     mkdir(figure_dir);
+% end
 % exportgraphics(gcf, fullfile(figure_dir,'viscoelastic_thickness_comparison.jpg'), ...
 % 'Resolution',300);
 
-%% Comparisons between elastic, viscous, and viscoelastic
+%% Maxwell beam thickness comparison
+maxwell_uniform = maxwell_beam_profile(L, x, uniform_parameters);
+maxwell_linear = maxwell_beam_profile(L, x, linear_parameters);
+maxwell_quad = maxwell_beam_profile(L, x, quad_parameters);
+maxwell_exp = maxwell_beam_profile(L, x, exp_parameters);
+maxwell_norm = maxwell_beam_profile(L, x, normalized_parameters);
+
 % Plot displacement for elastic
+figure;
+hold on;
+grid on;
+box on;
+
+plot(x_km, maxwell_linear, ...
+    'LineWidth', 2, ...
+    'DisplayName', 'Linear');
+
+plot(x_km, maxwell_quad, ...
+    'LineWidth', 2, ...
+    'DisplayName', 'Quadratic');
+
+plot(x_km, maxwell_exp, ...
+    'LineWidth', 2, ...
+    'DisplayName', 'Exponential');
+
+plot(x_km, maxwell_uniform, '--', ...
+    'LineWidth', 2, ...
+    'DisplayName', sprintf('Uniform: %.0f m', h_front));
+
+plot(x_km, maxwell_norm, ...
+    'LineWidth', 2, ...
+    'DisplayName', 'Normalized Mean');
+
+% Upper and lower uncertainty bounds around steady state
+upper_bound = w0 + sigma_z;
+lower_bound = w0 - sigma_z;
+
+yline(upper_bound, ':', ...
+    '$\pm\sigma_z$', ...
+    'Interpreter','latex', ...
+    'LabelHorizontalAlignment','right', ...
+    'HandleVisibility', 'off');
+yline(lower_bound, ':', ...
+    'HandleVisibility', 'off');
+
+% settling time
+uniform_settling = ...
+    calculate_settling_distance( ...
+        maxwell_uniform, x, w0, sigma_z);
+
+linear_settling = ...
+    calculate_settling_distance( ...
+        maxwell_linear, x, w0, sigma_z);
+
+quad_settling = ...
+    calculate_settling_distance( ...
+        maxwell_quad, x, w0, sigma_z);
+
+exp_settling = ...
+    calculate_settling_distance( ...
+        maxwell_exp, x, w0, sigma_z);
+
+norm_settling = ...
+    calculate_settling_distance( ...
+        maxwell_norm, x, w0, sigma_z);
+
+xline(uniform_settling, ':', ...
+    sprintf('Uniform = %.1f km', uniform_settling), ...
+    'LabelVerticalAlignment', 'bottom', ...
+    'LabelHorizontalAlignment', 'left', ...
+    'HandleVisibility', 'off');
+
+xline(linear_settling, ':', ...
+    sprintf('Linear = %.1f km', linear_settling), ...
+    'LabelVerticalAlignment', 'bottom', ...
+    'LabelHorizontalAlignment', 'left', ...
+    'HandleVisibility', 'off');
+
+xline(quad_settling, ':', ...
+    sprintf('Quad = %.1f km', quad_settling), ...
+    'LabelVerticalAlignment', 'bottom', ...
+    'LabelHorizontalAlignment', 'left', ...
+    'HandleVisibility', 'off');
+
+xline(exp_settling, ':', ...
+    sprintf('Exp = %.1f km', exp_settling), ...
+    'LabelVerticalAlignment', 'bottom', ...
+    'LabelHorizontalAlignment', 'left', ...
+    'HandleVisibility', 'off');
+
+xline(norm_settling, ':', ...
+    sprintf('Norm = %.1f km', norm_settling), ...
+    'LabelVerticalAlignment', 'middle', ...
+    'LabelHorizontalAlignment', 'left', ...
+    'HandleVisibility', 'off');
+
+xline(L_mean/1e3, '--', ...
+    sprintf('Mean GL Distance = %.1f km', L_mean/1e3), ...
+    'Color', 'red', ...
+    'LabelVerticalAlignment', 'middle', ...
+    'LabelHorizontalAlignment', 'right', ...
+    'HandleVisibility', 'off');
+
+yline(w0, ':', ...
+    '$w_0$', ...
+    'LabelHorizontalAlignment','left', ...
+    'Interpreter', 'latex', ...
+    'HandleVisibility', 'off');
+
+xlabel('Distance from grounding line (km)');
+ylabel('Vertical displacement (m)');
+title(sprintf('Maxwell uniform thickness vs non-uniform: h front = %.0f m, h gl = %.0f km', ...
+    h_front, h_gl));
+
+legend('Location', 'southeast');
+
+
+% figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/beam_bending/variable_thickness';
+% if ~exist(figure_dir, 'dir')
+%     mkdir(figure_dir);
+% end
+exportgraphics(gcf, fullfile(figure_dir,'maxwell_thickness_comparison.jpg'), ...
+'Resolution',300);
+
+%% Comparisons between rheology
 figure;
 hold on;
 grid on;
@@ -1168,10 +1552,16 @@ plot(x_km, elastic_norm, ...
 plot(x_km, viscous_norm, ...
     'LineWidth', 2, ...
     'DisplayName', 'viscous');
-
+%{
 plot(x_km, ve_norm, ...
     'LineWidth', 2, ...
-    'DisplayName', 'viscoelastic');
+    'DisplayName', 'Reeh');
+%}
+
+plot(x_km, maxwell_norm, ...
+    'LineWidth', 2, ...
+    'DisplayName', 'Maxwell');
+
 
 % Upper and lower uncertainty bounds around steady state
 upper_bound = w0 + sigma_z;
@@ -1193,10 +1583,15 @@ elastic_settling = ...
 viscous_settling = ...
     calculate_settling_distance( ...
         viscous_norm, x, w0, sigma_z);
-
+%{
 ve_settling = ...
     calculate_settling_distance( ...
         ve_norm, x, w0, sigma_z);
+%}
+
+maxwell_settling = ...
+    calculate_settling_distance( ...
+        maxwell_norm, x, w0, sigma_z);
 
 xline(elastic_settling, ':', ...
     sprintf('Elastic = %.1f km', elastic_settling), ...
@@ -1209,11 +1604,18 @@ xline(viscous_settling, ':', ...
     'LabelVerticalAlignment', 'middle', ...
     'LabelHorizontalAlignment', 'left', ...
     'HandleVisibility', 'off');
-
+%{
 xline(ve_settling, ':', ...
-    sprintf('Viscoelastic = %.1f km', ve_settling), ...
+    sprintf('Reeh = %.1f km', ve_settling), ...
     'LabelVerticalAlignment', 'middle', ...
     'LabelHorizontalAlignment', 'left', ...
+    'HandleVisibility', 'off');
+%}
+
+xline(maxwell_settling, ':', ...
+    sprintf('Maxwell = %.1f km', maxwell_settling), ...
+    'LabelVerticalAlignment', 'middle', ...
+    'LabelHorizontalAlignment', 'right', ...
     'HandleVisibility', 'off');
 
 xline(L_mean/1e3, '--', ...
@@ -1231,18 +1633,18 @@ yline(w0, ':', ...
 
 xlabel('Distance from grounding line (km)');
 ylabel('Vertical displacement (m)');
-title(sprintf('Comparison uniform thickness vs non-uniform: h front = %.0f m, h gl = %.0f km', ...
-    h_front, h_gl));
+% title(sprintf('Comparison uniform thickness vs non-uniform: h front = %.0f m, h gl = %.0f km', ...
+%     h_front, h_gl));
 
 legend('Location', 'southeast');
 
 
-figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/beam_bending/variable_thickness';
+figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/beam_bending/variable_thickness//PCA_profile/Presentation';
 if ~exist(figure_dir, 'dir')
     mkdir(figure_dir);
 end
-% exportgraphics(gcf, fullfile(figure_dir,'rheology_comparison.jpg'), ...
-% 'Resolution',300);
+exportgraphics(gcf, fullfile(figure_dir,'rheology_comparison.jpg'), ...
+'Resolution',300);
 
 %% Local functions 
 function [x_settle, y_settle, valid] = map_settling_points( ...
@@ -1548,6 +1950,7 @@ function u_viscoelastic_peak = viscoelastic_beam_profile(L, x, parameters)
 % parameters (includes rho_w, g, E_m, nu, w0, x_thickness, h_thickness)
 % Outputs:
 % u_viscoelastic_peak (displacement profile)
+% Note: solution becomes unstable after T = 18 hours
     % Initial guess
     x_mesh = linspace(0, L, 300);
     
@@ -1686,6 +2089,145 @@ function residual = viscoelastic_beam_bc(ya, yb)
 end
 
 function y_guess = viscoelastic_initial_guess(x, L, a)
+
+    transition_length = 0.20*L;
+
+    us_guess = a*(1 - exp(-x/transition_length));
+
+    alpha_s_guess = ...
+        (a/transition_length)*exp(-x/transition_length);
+
+    y_guess = [
+        us_guess
+        0
+        alpha_s_guess
+        0
+        0
+        0
+        0
+        0
+    ];
+end
+
+%% Local functions for maxwell beam
+function u_maxwell_peak = maxwell_beam_profile(L, x, parameters)
+%%outputs u_maxwell profile for varying bed thickness
+% Inputs:
+% L (length of beam)
+% x (horizontal evaluation points)
+% parameters (includes rho_w, g, E_m, nu, w0, x_thickness, h_thickness)
+% Outputs:
+% u_viscoelastic_peak (displacement profile)
+    % Initial guess
+    x_mesh = linspace(0, L, 300);
+    
+    solinit = bvpinit( ...
+        x_mesh, ...
+        @(x) maxwell_initial_guess(x, L, parameters.w0));
+    
+    % Solve
+    options = bvpset( ...
+        'RelTol', 1e-7, ...
+        'AbsTol', 1e-9, ...
+        'NMax', 20000, ...
+        'Stats', 'on');
+    
+    sol = bvp4c( ...
+        @(x,y) maxwell_beam_ode(x, y, parameters), ...
+        @maxwell_beam_bc, ...
+        solinit, ...
+        options);
+
+    Y = deval(sol, x);
+    x_km = x/1e3;
+    
+    us      = Y(1,:);
+    uc      = Y(2,:);
+    alpha_s = Y(3,:);
+    alpha_c = Y(4,:);
+    Qs      = Y(5,:);
+    Qc      = Y(6,:);
+    Ms      = Y(7,:);
+    Mc      = Y(8,:);
+    
+    displacement_amplitude = hypot(us, uc);
+    tilt_amplitude = hypot(alpha_s, alpha_c);
+    
+    displacement_phase = atan2d(uc, us);
+    tilt_phase = atan2d(alpha_c, alpha_s);
+    
+    t_peak = pi/(2*parameters.omega);
+    
+    u_maxwell_peak = ...
+        us .* sin(parameters.omega*t_peak) + ...
+        uc .* cos(parameters.omega*t_peak);
+end 
+
+function dydx = maxwell_beam_ode(x, y, p)
+% Maxwell model for beam.
+%
+% State vector:
+% y(1) = us       sine displacement component
+% y(2) = uc       cosine displacement component
+% y(3) = alpha_s  sine tilt component
+% y(4) = alpha_c  cosine tilt component
+% y(5) = Qs       sine shear component
+% y(6) = Qc       cosine shear component
+% y(7) = Ms       sine moment component
+% y(8) = Mc       cosine moment component
+
+    us      = y(1);
+    uc      = y(2);
+    alpha_s = y(3);
+    alpha_c = y(4);
+    Qs      = y(5);
+    Qc      = y(6);
+    Ms      = y(7);
+    Mc      = y(8);
+    
+    % Local thickness
+    h_local = interp1( ...
+        p.x_thickness, ...
+        p.h_thickness, ...
+        x, ...
+        'linear', ...
+        'extrap');
+
+    % Local second moment of area
+    I_local = h_local^3/12;
+    omega = p.omega;
+    % coefficients
+    C1 = 1/(4*I_local*omega*p.mu_m);
+    C2 = 3/(4*I_local*p.E_m);
+
+    % Return derivatives of all eight state variables
+    dydx = [
+        alpha_s                         % dus/dx
+        alpha_c                         % duc/dx
+        C1*Mc + C2*Ms                   % dalpha_s/dx
+        C2*Mc - C1*Ms                   % dalpha_c/dx
+        p.rho_w*p.g*(p.w0 - us)         % dQs/dx
+       -p.rho_w*p.g*uc                  % dQc/dx
+        Qs                              % dMs/dx
+        Qc                              % dMc/dx
+    ];
+end
+
+function residual = maxwell_beam_bc(ya, yb)
+
+    residual = [
+        ya(1)    % us(0) = 0
+        ya(2)    % uc(0) = 0
+        ya(3)    % alpha_s(0) = 0
+        ya(4)    % alpha_c(0) = 0
+        yb(5)    % Qs(L) = 0
+        yb(6)    % Qc(L) = 0
+        yb(7)    % Ms(L) = 0
+        yb(8)    % Mc(L) = 0
+    ];
+end
+
+function y_guess = maxwell_initial_guess(x, L, a)
 
     transition_length = 0.20*L;
 

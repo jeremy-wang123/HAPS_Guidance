@@ -14,7 +14,7 @@
 clear;
 clc;
 close all;
-
+%%
 % extract key params
 [h_shelf_mean,h_shelf_eff,h_front_mean,h_front_eff, h_calving_front] = extract_shelf_thickness('Thwaites Glacier');
 mean_amp = calculate_mean_amp('Thwaites', 'top2');
@@ -698,6 +698,160 @@ set(gca, 'FontSize', 12, 'LineWidth', 1);
 % figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/beam_bending';
 % exportgraphics(gcf, fullfile(figure_dir,'viscous_tidal_phases.jpg'), ...
 % 'Resolution',300);
+
+%% viscous beam bending
+% Number of animation frames
+nFrames = 120;
+
+% Go through one complete tidal cycle
+phases_deg = linspace(0, 360, nFrames);
+
+% Twilight colormap
+cmap = slanCM('twilight_s',256);
+nColors = size(cmap,1);
+
+%% -------------------------------------------------
+% Determine fixed y limits before animation
+%% -------------------------------------------------
+
+% Maximum possible displacement envelope
+w_amp = abs(W);
+
+w_max = max(w_amp);
+
+vertical_padding = 0.15*w_max;
+
+y_limits = [ ...
+    -w_max - vertical_padding, ...
+     w_max + vertical_padding];
+
+%% -------------------------------------------------
+% Create figure
+%% -------------------------------------------------
+
+fig = figure( ...
+    'Position',[100 100 1000 650], ...
+    'Color','w');
+
+ax = axes(fig);
+hold(ax,'on');
+
+% Initial phase
+phase_deg = phases_deg(1);
+t_current = (phase_deg/360)*T;
+
+w = imag(W .* exp(1i*omega*t_current));
+
+% Initial color
+color_index = 1;
+line_color = cmap(color_index,:);
+
+% Plot displacement
+h = plot(x_km, w, ...
+    'Color',line_color, ...
+    'LineWidth',3);
+
+% Grounding line / zero displacement
+yline(0,'k--', ...
+    'HandleVisibility','off');
+
+%% Formatting
+xlabel('Distance from grounding line (km)');
+ylabel('Vertical displacement (m)');
+
+title('Thwaites Glacier Tidal Deflection');
+
+xlim([0 L/1000]);
+ylim(y_limits);
+
+grid on;
+box on;
+
+set(gca, ...
+    'FontSize',12, ...
+    'LineWidth',1);
+
+%% Colorbar
+colormap(gca,cmap);
+clim([0 360]);
+
+cb = colorbar;
+cb.Label.String = 'Tidal phase (degrees)';
+
+cb.Ticks = 0:90:360;
+cb.TickLabels = { ...
+    '0^\circ', ...
+    '90^\circ', ...
+    '180^\circ', ...
+    '270^\circ', ...
+    '360^\circ'};
+
+%% Moving phase label
+phase_text = text( ...
+    0.03,0.92, ...
+    'Phase = 0^\circ', ...
+    'Units','normalized', ...
+    'FontSize',14, ...
+    'FontWeight','bold');
+
+%% -------------------------------------------------
+% GIF settings
+%% -------------------------------------------------
+
+figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/animations';
+
+if ~exist(figure_dir,'dir')
+    mkdir(figure_dir);
+end
+
+fname = fullfile(figure_dir,'viscous_phases');
+
+framerate = 25;
+
+%% -------------------------------------------------
+% Animate
+%% -------------------------------------------------
+
+for j = 1:nFrames
+
+    % Current tidal phase
+    phase_deg = phases_deg(j);
+
+    % Convert phase to time
+    t_current = (phase_deg/360)*T;
+
+    % Calculate instantaneous displacement
+    w = imag(W .* exp(1i*omega*t_current));
+
+    % Select color corresponding to phase
+    color_position = phase_deg/360;
+
+    color_index = 1 + ...
+        round(color_position*(nColors-1));
+
+    line_color = cmap(color_index,:);
+
+    % Update displacement
+    h.YData = w;
+
+    % Update line color
+    h.Color = line_color;
+
+    % Update phase label
+    phase_text.String = ...
+        sprintf('Phase = %.0f^\\circ',phase_deg);
+
+    drawnow limitrate
+
+    % Write GIF
+    if j == 1
+        gifanim(fname,framerate,fig,1);
+    else
+        gifanim(fname,framerate,fig,0);
+    end
+
+end
+%%
 
 %% varying the tau_e valeus
 

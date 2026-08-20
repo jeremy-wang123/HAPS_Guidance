@@ -385,8 +385,8 @@ box on;
 set(gca, 'FontSize', 12, 'LineWidth', 1);
 
 % 
-exportgraphics(gcf, fullfile(figure_dir,'reeh_viscoelastic_tidal_phases.jpg'), ...
-'Resolution',300);
+% exportgraphics(gcf, fullfile(figure_dir,'reeh_viscoelastic_tidal_phases.jpg'), ...
+% 'Resolution',300);
 
 %% Local functions for elastic beam
 
