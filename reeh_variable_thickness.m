@@ -529,12 +529,13 @@ ylim([min(y_valid) - padding, ...
 box on;
 
 
-xlabel('Polar stereographic x (m)');
-ylabel('Polar stereographic y (m)');
-
-title('Shelf-Constrained GL-to-Calving-Front Transects');
+xlabel('x (m)');
+ylabel('y (m)');
 
 legend([gl_handles, calving_handles], 'Location','southwest');
+
+exportgraphics(gcf, fullfile(figure_dir,'transects.jpg'), ...
+'Resolution',300);
 
 %% Determine settling time of all transects
 
