@@ -1,6 +1,9 @@
 %% Preliminary plots
 
 %% Quiver and color plot of ice velocities
+addpath('/Users/jeremywang/Documents/MATLAB/measures_v3.1.2') 
+addpath('/Users/jeremywang/Documents/MATLAB/chadagreene-Antarctic-Mapping-Tools-3063a1b') 
+
 figure
 measuresps('speed','log','alpha',0.7)
 cb = colorbar;
