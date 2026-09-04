@@ -40,8 +40,8 @@ max_distance = 20;   % km
 xg_all = x_gl_match(:);
 yg_all = y_gl_match(:);
 
-x_settle_all = viscous_x_settle(:);
-y_settle_all = viscous_y_settle(:);
+x_settle_all = maxwell_x_settle(:);
+y_settle_all = maxwell_y_settle(:);
 
 % Distance from GL point to Maxwell point
 transect_distance = hypot( ...
@@ -290,7 +290,7 @@ scatter(xg, yg, ...
     'DisplayName','Grounding Line');
 
 % Maxwell settling points
-scatter(xm, ym, ...
+scatter(xs, ys, ...
     12, 'r', 'filled', ...
     'DisplayName','Maxwell Settling');
 
@@ -306,7 +306,7 @@ end
 axis equal;
 
 % Add small padding
-padding = 5e3;   % km
+padding = 30e3;   % km
 
 xlim([min(x_valid) - padding, ...
       max(x_valid) + padding]);
@@ -314,265 +314,310 @@ xlim([min(x_valid) - padding, ...
 ylim([min(y_valid) - padding, ...
       max(y_valid) + padding]);
 
-%% STRIKE-DIRECTION RASTER
 
-s_path_strike = [];
-n_path_strike = [];
-
-direction = 1;    % +1 = forward along strike
-                 % -1 = backward along strike
-
-for j = 1:size(occupied,2)
-
-    % Which cells exist in this normal-direction row?
-    active_i = find(occupied(:,j));
-
-    if isempty(active_i)
-        continue
-    end
-
-    % Use the tile EDGES, not centers
-    s_min = s_edges(min(active_i));
-    s_max = s_edges(max(active_i)+1);
-
-    % Choose one edge of the tile row
-    n_current = n_edges(j+1);
-
-    if direction == 1
-
-        s_start = s_min;
-        s_end   = s_max;
-
-    else
-        s_start = s_max;
-        s_end   = s_min;
-
-    end
-
-    if isempty(s_path_strike)
-
-        % First raster leg
-        s_path_strike = [s_start, s_end];
-        n_path_strike = [n_current, n_current];
-
-    else
-
-        % Current location
-        s_prev = s_path_strike(end);
-        n_prev = n_path_strike(end);
-
-        % ---------------------------------------------
-        % TURN:
-        % First stay straight along s until aligned
-        % with beginning of next pass.
-        % Then move normal to next row.
-        % ---------------------------------------------
-
-        if abs(s_prev - s_start) > 1e-6
-            s_path_strike(end+1) = s_start;
-            n_path_strike(end+1) = n_prev;
-        end
-
-        % Move perpendicular to strike
-        s_path_strike(end+1) = s_start;
-        n_path_strike(end+1) = n_current;
-
-        % Straight survey leg
-        s_path_strike(end+1) = s_end;
-        n_path_strike(end+1) = n_current;
-
-    end
-
-    % Reverse direction for next pass
-    direction = -direction;
-
-end
-
-%% Convert strike raster to x-y
-
-x_path_strike = x0 + ...
-    s_path_strike*strike(1) + ...
-    n_path_strike*normal(1);
-
-y_path_strike = y0 + ...
-    s_path_strike*strike(2) + ...
-    n_path_strike*normal(2);
-
-%% NORMAL-DIRECTION RASTER
-
-s_path_normal = [];
-n_path_normal = [];
-
-direction = 1;    % +1 = forward along normal
-                  % -1 = backward along normal
-
-for i = 1:size(occupied,1)
-
-    % Which cells exist in this strike-direction column?
-    active_j = find(occupied(i,:));
-
-    if isempty(active_j)
-        continue
-    end
-
-    % Find the two ends of this column
-    n_min = n_edges(min(active_j));
-    n_max = n_edges(max(active_j)+1);
-
-    % Use tile edge in the strike direction
-    s_current = s_edges(i);
-
-    % Determine which end we start from
-    if direction == 1
-
-        n_start = n_min;
-        n_end   = n_max;
-
-    else
-
-        n_start = n_max;
-        n_end   = n_min;
-
-    end
-
-    if isempty(s_path_normal)
-
-        % First raster leg
-        s_path_normal = [s_current, s_current];
-        n_path_normal = [n_start, n_end];
-
-    else
-
-        % Current aircraft location
-        s_prev = s_path_normal(end);
-        n_prev = n_path_normal(end);
-
-        % Move along normal direction until aligned
-        % with the beginning of the next pass
-        if abs(n_prev - n_start) > 1e-6
-
-            s_path_normal(end+1) = s_prev;
-            n_path_normal(end+1) = n_start;
-
-        end
-
-        % Move along strike to next column
-        s_path_normal(end+1) = s_current;
-        n_path_normal(end+1) = n_start;
-
-        % Fly straight survey leg along normal
-        s_path_normal(end+1) = s_current;
-        n_path_normal(end+1) = n_end;
-
-    end
-
-    % Reverse direction for next pass
-    direction = -direction;
-
-end
-
-%% Convert normal raster from s-n coordinates to x-y
-
-x_path_normal = x0 + ...
-    s_path_normal*strike(1) + ...
-    n_path_normal*normal(1);
-
-y_path_normal = y0 + ...
-    s_path_normal*strike(2) + ...
-    n_path_normal*normal(2);
-
-%% Plot normal-direction raster
-
-figure;
-
-pcolor(xgrid, ygrid, H_shelf_map);
-shading flat;
-hold on;
-
-% ROI
-plot(roi_1, ...
-    'FaceColor','none', ...
-    'EdgeColor','k', ...
-    'LineWidth',2);
-
-plot(roi_2, ...
-    'FaceColor','none', ...
-    'EdgeColor','k', ...
-    'LineWidth',2);
-
-% Tiles
-for k = 1:length(tiles)
-
-    plot(tiles(k), ...
-        'FaceColor','none', ...
-        'EdgeColor',[0.7 0.7 0.7], ...
-        'LineWidth',2);
-
-end
-
-% Raster
-plot(x_path_normal, y_path_normal, ...
-    'r-', ...
-    'LineWidth',2);
-
-axis equal
-
-title('Strike-Direction Raster');
-
-% Add small padding
-padding = 10e3;   % km
-
-xlim([min(x_valid) - padding, ...
-      max(x_valid) + padding]);
-
-ylim([min(y_valid) - padding, ...
-      max(y_valid) + padding]);
-
-%% Convert raster path into time-dependent coordinates
+%% ============================================================
+%  RASTER PATH + TILE SURVEY TIMES
+% ============================================================
 
 V_ground = 20;       % aircraft ground speed [m/s]
-dt = 5;              % time step [s]
+dt = 5;              % trajectory time step [s]
 
-% Choose which raster you want to simulate
-x_path = x_path_normal(:);
-y_path = y_path_normal(:);
+raster_mode = 'strike';   % 'strike' or 'normal'
 
-% x_path = x_path_strike(:);
-% y_path = y_path_strike(:);
+% One survey time for every occupied tile
+tile_times = nan(size(occupied));    % [hr]
 
-% Distance along each segment of raster
+% Track total distance traveled while constructing path
+distance_traveled = 0;               % [m]
+
+
+%% ============================================================
+%  STRIKE-DIRECTION RASTER
+% ============================================================
+
+if strcmpi(raster_mode,'strike')
+
+    s_path = [];
+    n_path = [];
+
+    direction = 1;
+
+    for j = 1:size(occupied,2)
+
+        % Tiles that exist in this normal-direction row
+        active_i = find(occupied(:,j));
+
+        if isempty(active_i)
+            continue
+        end
+
+        % Ends of raster leg
+        s_min = s_edges(min(active_i));
+        s_max = s_edges(max(active_i)+1);
+
+        % Aircraft flies on upper normal edge of row
+        n_current = n_edges(j+1);
+
+        % Determine direction of this pass
+        if direction == 1
+            s_start = s_min;
+            s_end   = s_max;
+        else
+            s_start = s_max;
+            s_end   = s_min;
+        end
+
+
+        % Move aircraft to beginning of survey leg
+
+        if isempty(s_path)
+
+            % First point of entire flight
+            s_path = s_start;
+            n_path = n_current;
+
+        else
+
+            s_prev = s_path(end);
+            n_prev = n_path(end);
+
+            % First move along strike until aligned
+            if abs(s_prev - s_start) > 1e-6
+
+                distance_traveled = distance_traveled + ...
+                    abs(s_start - s_prev);
+
+                s_path(end+1) = s_start;
+                n_path(end+1) = n_prev;
+
+            end
+
+            % Then move perpendicular to strike
+            if abs(n_prev - n_current) > 1e-6
+
+                distance_traveled = distance_traveled + ...
+                    abs(n_current - n_prev);
+
+                s_path(end+1) = s_start;
+                n_path(end+1) = n_current;
+
+            end
+
+        end
+
+
+        % Assign survey time to each tile in this row
+
+        for ii = active_i(:)'
+
+            % Center of this tile along strike
+            s_center = ...
+                (s_edges(ii) + s_edges(ii+1))/2;
+
+            % Distance from beginning of this pass
+            distance_into_leg = ...
+                abs(s_center - s_start);
+
+            % Total distance traveled when aircraft reaches tile center
+            distance_at_tile = ...
+                distance_traveled + distance_into_leg;
+
+            % Survey time [hr]
+            tile_times(ii,j) = ...
+                distance_at_tile / V_ground / 3600;
+
+        end
+
+
+        % Fly survey leg
+
+        survey_distance = abs(s_end - s_start);
+
+        distance_traveled = ...
+            distance_traveled + survey_distance;
+
+        s_path(end+1) = s_end;
+        n_path(end+1) = n_current;
+
+
+        % Reverse direction for next row
+        direction = -direction;
+
+    end
+
+
+% ============================================================
+%  NORMAL-DIRECTION RASTER
+% ============================================================
+
+elseif strcmpi(raster_mode,'normal')
+
+    s_path = [];
+    n_path = [];
+
+    direction = 1;
+
+    for i = 1:size(occupied,1)
+
+        % Tiles that exist in this strike-direction column
+        active_j = find(occupied(i,:));
+
+        if isempty(active_j)
+            continue
+        end
+
+        % Ends of raster leg
+        n_min = n_edges(min(active_j));
+        n_max = n_edges(max(active_j)+1);
+
+        % Aircraft flies along one strike-direction tile edge
+        s_current = s_edges(i);
+
+        % Determine pass direction
+        if direction == 1
+            n_start = n_min;
+            n_end   = n_max;
+        else
+            n_start = n_max;
+            n_end   = n_min;
+        end
+
+
+        % Move aircraft to beginning of survey leg
+
+        if isempty(s_path)
+
+            % First point of entire flight
+            s_path = s_current;
+            n_path = n_start;
+
+        else
+
+            s_prev = s_path(end);
+            n_prev = n_path(end);
+
+            % First move along normal until aligned
+            if abs(n_prev - n_start) > 1e-6
+
+                distance_traveled = distance_traveled + ...
+                    abs(n_start - n_prev);
+
+                s_path(end+1) = s_prev;
+                n_path(end+1) = n_start;
+
+            end
+
+            % Then move along strike to next column
+            if abs(s_prev - s_current) > 1e-6
+
+                distance_traveled = distance_traveled + ...
+                    abs(s_current - s_prev);
+
+                s_path(end+1) = s_current;
+                n_path(end+1) = n_start;
+
+            end
+
+        end
+
+
+        % Assign survey time to each tile in this column
+
+        for jj = active_j(:)'
+
+            % Center of tile along normal direction
+            n_center = ...
+                (n_edges(jj) + n_edges(jj+1))/2;
+
+            % Distance from beginning of this pass
+            distance_into_leg = ...
+                abs(n_center - n_start);
+
+            % Total distance traveled
+            distance_at_tile = ...
+                distance_traveled + distance_into_leg;
+
+            % Survey time [hr]
+            tile_times(i,jj) = ...
+                distance_at_tile / V_ground / 3600;
+
+        end
+
+
+        % Fly survey leg
+
+        survey_distance = abs(n_end - n_start);
+
+        distance_traveled = ...
+            distance_traveled + survey_distance;
+
+        s_path(end+1) = s_current;
+        n_path(end+1) = n_end;
+
+
+        % Reverse direction
+        direction = -direction;
+
+    end
+
+else
+
+    error('raster_mode must be ''strike'' or ''normal''.');
+
+end
+
+
+%% ============================================================
+%  CONVERT s-n PATH TO x-y
+% ============================================================
+
+x_path = x0 + ...
+    s_path*strike(1) + ...
+    n_path*normal(1);
+
+y_path = y0 + ...
+    s_path*strike(2) + ...
+    n_path*normal(2);
+
+x_path = x_path(:);
+y_path = y_path(:);
+
+
+%% ============================================================
+%  PARAMETERIZE FLIGHT PATH IN TIME
+% ============================================================
+
 dx = diff(x_path);
 dy = diff(y_path);
 
-segment_length = hypot(dx,dy);     % [m]
+segment_length = hypot(dx,dy);
 
-% Cumulative distance along entire flight path
 distance_path = [0; cumsum(segment_length)];
 
-% Total flight-path length
 total_distance = distance_path(end);
 
 fprintf('Total flight distance = %.2f km\n', ...
     total_distance/1e3);
 
-% Convert distance into time
-time_path = distance_path / V_ground;       % [s]
+
+% Time at raster vertices
+time_path = distance_path / V_ground;
 
 total_time = time_path(end);
 
 fprintf('Total flight time = %.2f hr\n', ...
     total_time/3600);
 
-% Fine time vector
 
+% Fine time vector
 time_flight = (0:dt:total_time)';
 
-% Make sure final trajectory point is included
 if time_flight(end) < total_time
     time_flight(end+1) = total_time;
 end
 
-%% Plot time dependent raster pattern
+
+% Interpolated aircraft coordinates
 x_flight = interp1( ...
     time_path, ...
     x_path, ...
@@ -585,10 +630,16 @@ y_flight = interp1( ...
     time_flight, ...
     'linear');
 
+
+%% ============================================================
+%  PLOT
+% ============================================================
+
 figure;
 hold on;
 
-% plot the shelf as just an outline
+% Shelf background
+
 shelf_plot = ones(size(H_shelf_map));
 shelf_plot(~isfinite(H_shelf_map)) = NaN;
 
@@ -596,18 +647,22 @@ h = pcolor(xgrid, ygrid, shelf_plot);
 shading flat;
 
 gray_color = [0.8 0.8 0.8];
-% Convert CData to truecolor RGB so it does not use the colormap
-rgb = repmat(reshape(gray_color,1,1,3), ...
-             size(shelf_plot,1), ...
-             size(shelf_plot,2), ...
-             1);
-set(h, 'CData', rgb);
-% Make NaN regions transparent
+
+rgb = repmat( ...
+    reshape(gray_color,1,1,3), ...
+    size(shelf_plot,1), ...
+    size(shelf_plot,2), ...
+    1);
+
+set(h,'CData',rgb);
+
 set(h, ...
-    'AlphaData', double(isfinite(H_shelf_map)), ...
+    'AlphaData',double(isfinite(H_shelf_map)), ...
     'FaceAlpha','flat');
 
-% ROI
+
+% ROI outlines
+
 plot(roi_1, ...
     'FaceColor','none', ...
     'EdgeColor','k', ...
@@ -618,58 +673,211 @@ plot(roi_2, ...
     'EdgeColor','k', ...
     'LineWidth',2);
 
-% Tiles
-for k = 1:length(tiles)
 
-    plot(tiles(k), ...
-        'FaceColor','none', ...
-        'EdgeColor',[0.7 0.7 0.7], ...
-        'LineWidth',2);
+% ============================================================
+%  TILE COLORS
+% ============================================================
+
+cmap = parula(256);
+colormap(cmap);
+
+% Only occupied/surveyed tiles
+valid_times = tile_times(isfinite(tile_times));
+
+tmin = min(valid_times);
+tmax = max(valid_times);
+
+% Make colorbar use full available range
+clim([tmin tmax]);
+
+
+for i = 1:size(occupied,1)
+
+    for j = 1:size(occupied,2)
+
+        if ~occupied(i,j)
+            continue
+        end
+
+        if isnan(tile_times(i,j))
+            continue
+        end
+
+
+        % Construct this tile directly from its grid edges
+
+        s_tile = [ ...
+            s_edges(i), ...
+            s_edges(i+1), ...
+            s_edges(i+1), ...
+            s_edges(i)];
+
+        n_tile = [ ...
+            n_edges(j), ...
+            n_edges(j), ...
+            n_edges(j+1), ...
+            n_edges(j+1)];
+
+
+        % Convert tile to x-y
+        x_tile = x0 + ...
+            s_tile*strike(1) + ...
+            n_tile*normal(1);
+
+        y_tile = y0 + ...
+            s_tile*strike(2) + ...
+            n_tile*normal(2);
+
+
+        % Convert tile time into colormap color
+
+        cval = ...
+            (tile_times(i,j) - tmin) / ...
+            (tmax - tmin);
+
+        cval = max(0,min(1,cval));
+
+        color_idx = ...
+            round(cval*(size(cmap,1)-1)) + 1;
+
+        tile_color = cmap(color_idx,:);
+
+
+        % Draw tile
+
+        tile_poly = polyshape(x_tile,y_tile);
+
+        plot(tile_poly, ...
+            'FaceColor',tile_color, ...
+            'EdgeColor',[0.6 0.6 0.6], ...
+            'LineWidth',0.5, ...
+            'HandleVisibility','off');
+
+    end
 
 end
 
 
-plot(x_path, y_path, ...
-    'k-', ...
-    'LineWidth',2);
+% Flight path
 
-scatter(x_flight, y_flight, ...
-    5, ...
-    time_flight/3600, ...
-    'filled');
+plot(x_path, y_path, ...
+    'r-', ...
+    'LineWidth',1.5, ...
+    'HandleVisibility','off');
+
+
+% Start point
+
+scatter(x_flight(1), y_flight(1), ...
+    80, ...
+    'g', ...
+    'filled', ...
+    'MarkerEdgeColor','k', ...
+    'DisplayName','Start');
+
+
+% End point
+scatter(x_flight(end), y_flight(end), ...
+    80, ...
+    'r', ...
+    'filled', ...
+    'MarkerEdgeColor','k', ...
+    'DisplayName','End');
+
+% Add flight-direction arrow
+arrow_fracs = [0.2 0.4 0.6 0.8];
+
+arrow_length = 4e3;   % arrowhead length [m]
+arrow_width  = 2e3;   % arrowhead width [m]
+
+for f = arrow_fracs
+
+    arrow_idx = round(length(x_flight) * f);
+
+    % Direction of flight
+    dx = x_flight(arrow_idx+1) - x_flight(arrow_idx);
+    dy = y_flight(arrow_idx+1) - y_flight(arrow_idx);
+
+    % Normalize direction vector
+    L = hypot(dx,dy);
+
+    ux = dx/L;
+    uy = dy/L;
+
+    % Perpendicular direction
+    px = -uy;
+    py = ux;
+
+    % Location of arrow tip
+    xtip = x_flight(arrow_idx);
+    ytip = y_flight(arrow_idx);
+
+    % Back center of triangle
+    xback = xtip - arrow_length*ux;
+    yback = ytip - arrow_length*uy;
+
+    % Triangle corners
+    x_arrow = [ ...
+        xtip, ...
+        xback + arrow_width/2*px, ...
+        xback - arrow_width/2*px];
+
+    y_arrow = [ ...
+        ytip, ...
+        yback + arrow_width/2*py, ...
+        yback - arrow_width/2*py];
+
+    % Draw arrowhead
+    patch(x_arrow, y_arrow, 'k', ...
+        'EdgeColor','k', ...
+        'HandleVisibility','off');
+
+end
+
+% Colorbar
+
+cb = colorbar;
+cb.Label.String = 'Tile survey time (hr)';
+
+
+% Figure formatting
 
 axis equal;
 
-cb = colorbar;
-cb.Label.String = 'Flight time (hr)';
-
 xlabel('x (m)');
 ylabel('y (m)');
-title(sprintf('Time-Parameterized Flight Path, Total flight time %.2f hours', total_time/3600));
 
-% Add small padding
-padding = 20e3;   % km
+title(sprintf( ...
+    '%s Raster, Total Flight Time %.2f hr', ...
+    upper(raster_mode), ...
+    total_time/3600));
 
-xlim([min(x_valid) - padding, ...
-      max(x_valid) + padding]);
 
-ylim([min(y_valid) - padding, ...
-      max(y_valid) + padding]);
+padding = 30e3;   % [m]
 
-figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/raster_pattern/20km/viscous';
+xlim([ ...
+    min(x_valid)-padding, ...
+    max(x_valid)+padding]);
+
+ylim([ ...
+    min(y_valid)-padding, ...
+    max(y_valid)+padding]);
+
+
+figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/raster_pattern/20km';
 
 % Create folder if it doesn't exist
 if ~exist(figure_dir, 'dir')
     mkdir(figure_dir);
 end
 
-% exportgraphics(gcf, ...
-%     fullfile(figure_dir, 'strike_time.png'), ...
-%     'Resolution', 300);
-
 exportgraphics(gcf, ...
-   fullfile(figure_dir, 'normal_time.png'), ...
-   'Resolution', 300);
+    fullfile(figure_dir, 'colored_tiles_strike.png'), ...
+    'Resolution', 300);
+
+% exportgraphics(gcf, ...
+%    fullfile(figure_dir, 'colored_tiles_normal.png'), ...
+%    'Resolution', 300);
 %% Battery simulation along flight path
 battery_capacity = 27.2;      % kWh
 E_initial = battery_capacity; % start fully charged
@@ -803,6 +1011,72 @@ scatter(x_flight, y_flight, ...
     E_percent, ...
     'filled');
 
+% Start point
+scatter(x_flight(1), y_flight(1), ...
+    80, ...
+    'g', ...
+    'filled', ...
+    'MarkerEdgeColor','k', ...
+    'DisplayName','Start');
+
+% End point
+scatter(x_flight(end), y_flight(end), ...
+    80, ...
+    'r', ...
+    'filled', ...
+    'MarkerEdgeColor','k', ...
+    'DisplayName','End');
+
+% Add flight-direction arrow
+arrow_fracs = [0.2 0.4 0.6 0.8];
+
+arrow_length = 4e3;   % arrowhead length [m]
+arrow_width  = 2e3;   % arrowhead width [m]
+
+for f = arrow_fracs
+
+    arrow_idx = round(length(x_flight) * f);
+
+    % Direction of flight
+    dx = x_flight(arrow_idx+1) - x_flight(arrow_idx);
+    dy = y_flight(arrow_idx+1) - y_flight(arrow_idx);
+
+    % Normalize direction vector
+    L = hypot(dx,dy);
+
+    ux = dx/L;
+    uy = dy/L;
+
+    % Perpendicular direction
+    px = -uy;
+    py = ux;
+
+    % Location of arrow tip
+    xtip = x_flight(arrow_idx);
+    ytip = y_flight(arrow_idx);
+
+    % Back center of triangle
+    xback = xtip - arrow_length*ux;
+    yback = ytip - arrow_length*uy;
+
+    % Triangle corners
+    x_arrow = [ ...
+        xtip, ...
+        xback + arrow_width/2*px, ...
+        xback - arrow_width/2*px];
+
+    y_arrow = [ ...
+        ytip, ...
+        yback + arrow_width/2*py, ...
+        yback - arrow_width/2*py];
+
+    % Draw arrowhead
+    patch(x_arrow, y_arrow, 'k', ...
+        'EdgeColor','k', ...
+        'HandleVisibility','off');
+
+end
+
 axis equal;
 
 colormap(flipud(nebula));
@@ -814,7 +1088,7 @@ ylabel('y (m)');
 title(sprintf('Battery Life Raster Pattern, Total flight time %.2f hours', total_time/3600));
 
 % Add small padding
-padding = 20e3;   % km
+padding = 30e3;   % km
 
 xlim([min(x_valid) - padding, ...
       max(x_valid) + padding]);
@@ -826,9 +1100,9 @@ ylim([min(y_valid) - padding, ...
 %     fullfile(figure_dir, 'strike_battery.png'), ...
 %     'Resolution', 300);
 
-exportgraphics(gcf, ...
-   fullfile(figure_dir, 'normal_battery.png'), ...
-   'Resolution', 300);
+% exportgraphics(gcf, ...
+%    fullfile(figure_dir, 'normal_battery.png'), ...
+%    'Resolution', 300);
 
 %% Function for calculating solar flux 
 function [P_solar, Id, Is, zeta, solar_az] = calculate_solar_power(lat, lon, time_num)

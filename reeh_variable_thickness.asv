@@ -22,7 +22,7 @@ mu_m = 1/(2*A*tau_e^2); % steady creep viscosity
 E_m = 9.3e9; % young's modulus GPa
 E_v = 10e9; % elastic modulus GPa
 mu_v = 600e9; % elastic viscosity GPa
-T = 12*3600;
+T = 24*3600;
 omega = 2*pi/T;
 
 
@@ -1569,7 +1569,7 @@ w_uniform = w0 .* ...
 viscous_uniform = viscous_beam_profile(L, x, uniform_parameters);
 ve_uniform = viscoelastic_beam_profile(L, x, uniform_parameters);
 maxwell_uniform = maxwell_beam_profile(L, x, uniform_parameters);
-%%
+
 figure;
 hold on;
 grid on;
@@ -1585,7 +1585,7 @@ plot(x_km, viscous_uniform, ...
 
 plot(x_km, ve_uniform, ...
     'LineWidth', 2, ...
-    'DisplayName', 'Burgers');
+    'DisplayName', 'Reeh');
 
 
 plot(x_km, maxwell_uniform, ...
@@ -1641,6 +1641,7 @@ xline(ve_settling, ':', ...
     'LabelHorizontalAlignment', 'left', ...
     'HandleVisibility', 'off');
 
+ith
 xline(maxwell_settling, ':', ...
     sprintf('Maxwell = %.1f km', maxwell_settling), ...
     'LabelVerticalAlignment', 'middle', ...
@@ -1676,10 +1677,6 @@ exportgraphics(gcf, fullfile(figure_dir,'uniform_comparison.jpg'), ...
 'Resolution',300);
 
 %% Comparisons between rheology with varying thickness
-elastic_norm = elastic_beam_profile(L, x, normalized_parameters);
-viscous_norm = viscous_beam_profile(L, x, normalized_parameters);
-maxwell_norm = maxwell_beam_profile(L, x, normalized_parameters);
-
 figure;
 hold on;
 grid on;
@@ -1779,7 +1776,7 @@ ylabel('Vertical displacement (m)');
 legend('Location', 'southeast');
 
 
-figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/beam_bending/variable_thickness/PCA_profile/Presentation';
+figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/beam_bending/variable_thickness//PCA_profile/Presentation';
 if ~exist(figure_dir, 'dir')
     mkdir(figure_dir);
 end

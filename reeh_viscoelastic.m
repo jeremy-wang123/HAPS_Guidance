@@ -221,6 +221,26 @@ t_peak = T/4;
 u_viscous_peak = ...
     us .* sin(omega*t_peak) + ...
     uc .* cos(omega*t_peak);
+
+%% Maxwell profile
+parameters.rho_w = rho_w;
+parameters.g     = g;
+parameters.w0     = w0;
+parameters.I     = I;
+
+parameters.E_m   = E_m;
+parameters.E_v   = E_v;
+parameters.mu_v  = mu_v;
+parameters.mu_m  = mu_m;
+
+parameters.omega = omega;
+parameters.x_thickness = linspace(0, L, 1000);
+parameters.h_thickness = h * ones(size(x_thickness));
+
+
+maxwell_peak = maxwell_beam_profile(L, x, parameters)
+
+
 %% Displacement profile at peak high tide
 figure;
 hold on;
@@ -627,7 +647,144 @@ function y_guess = viscous_initial_guess(x, L, a)
     ];
 end
 
+%% Local functions for maxwell beam
+function u_maxwell_peak = maxwell_beam_profile(L, x, parameters)
+%%outputs u_maxwell profile for varying bed thickness
+% Inputs:
+% L (length of beam)
+% x (horizontal evaluation points)
+% parameters (includes rho_w, g, E_m, nu, w0, x_thickness, h_thickness)
+% Outputs:
+% u_viscoelastic_peak (displacement profile)
+    % Initial guess
+    x_mesh = linspace(0, L, 300);
+    
+    solinit = bvpinit( ...
+        x_mesh, ...
+        @(x) maxwell_initial_guess(x, L, parameters.w0));
+    
+    % Solve
+    options = bvpset( ...
+        'RelTol', 1e-7, ...
+        'AbsTol', 1e-9, ...
+        'NMax', 20000, ...
+        'Stats', 'on');
+    
+    sol = bvp4c( ...
+        @(x,y) maxwell_beam_ode(x, y, parameters), ...
+        @maxwell_beam_bc, ...
+        solinit, ...
+        options);
 
+    Y = deval(sol, x);
+    x_km = x/1e3;
+    
+    us      = Y(1,:);
+    uc      = Y(2,:);
+    alpha_s = Y(3,:);
+    alpha_c = Y(4,:);
+    Qs      = Y(5,:);
+    Qc      = Y(6,:);
+    Ms      = Y(7,:);
+    Mc      = Y(8,:);
+    
+    displacement_amplitude = hypot(us, uc);
+    tilt_amplitude = hypot(alpha_s, alpha_c);
+    
+    displacement_phase = atan2d(uc, us);
+    tilt_phase = atan2d(alpha_c, alpha_s);
+    
+    t_peak = pi/(2*parameters.omega);
+    
+    u_maxwell_peak = ...
+        us .* sin(parameters.omega*t_peak) + ...
+        uc .* cos(parameters.omega*t_peak);
+end 
+
+function dydx = maxwell_beam_ode(x, y, p)
+% Maxwell model for beam.
+%
+% State vector:
+% y(1) = us       sine displacement component
+% y(2) = uc       cosine displacement component
+% y(3) = alpha_s  sine tilt component
+% y(4) = alpha_c  cosine tilt component
+% y(5) = Qs       sine shear component
+% y(6) = Qc       cosine shear component
+% y(7) = Ms       sine moment component
+% y(8) = Mc       cosine moment component
+
+    us      = y(1);
+    uc      = y(2);
+    alpha_s = y(3);
+    alpha_c = y(4);
+    Qs      = y(5);
+    Qc      = y(6);
+    Ms      = y(7);
+    Mc      = y(8);
+    
+    % Local thickness
+    h_local = interp1( ...
+        p.x_thickness, ...
+        p.h_thickness, ...
+        x, ...
+        'linear', ...
+        'extrap');
+
+    % Local second moment of area
+    I_local = h_local^3/12;
+    omega = p.omega;
+    % coefficients
+    C1 = 1/(4*I_local*omega*p.mu_m);
+    C2 = 3/(4*I_local*p.E_m);
+
+    % Return derivatives of all eight state variables
+    dydx = [
+        alpha_s                         % dus/dx
+        alpha_c                         % duc/dx
+        C1*Mc + C2*Ms                   % dalpha_s/dx
+        C2*Mc - C1*Ms                   % dalpha_c/dx
+        p.rho_w*p.g*(p.w0 - us)         % dQs/dx
+       -p.rho_w*p.g*uc                  % dQc/dx
+        Qs                              % dMs/dx
+        Qc                              % dMc/dx
+    ];
+end
+
+function residual = maxwell_beam_bc(ya, yb)
+
+    residual = [
+        ya(1)    % us(0) = 0
+        ya(2)    % uc(0) = 0
+        ya(3)    % alpha_s(0) = 0
+        ya(4)    % alpha_c(0) = 0
+        yb(5)    % Qs(L) = 0
+        yb(6)    % Qc(L) = 0
+        yb(7)    % Ms(L) = 0
+        yb(8)    % Mc(L) = 0
+    ];
+end
+
+function y_guess = maxwell_initial_guess(x, L, a)
+
+    transition_length = 0.20*L;
+
+    us_guess = a*(1 - exp(-x/transition_length));
+
+    alpha_s_guess = ...
+        (a/transition_length)*exp(-x/transition_length);
+
+    y_guess = [
+        us_guess
+        0
+        alpha_s_guess
+        0
+        0
+        0
+        0
+        0
+    ];
+end
 
 
 
