@@ -699,7 +699,7 @@ set(gca, 'FontSize', 12, 'LineWidth', 1);
 % exportgraphics(gcf, fullfile(figure_dir,'viscous_tidal_phases.jpg'), ...
 % 'Resolution',300);
 
-%% viscous beam bending
+%% Creating animation to show phases
 % Number of animation frames
 nFrames = 120;
 
@@ -710,9 +710,9 @@ phases_deg = linspace(0, 360, nFrames);
 cmap = slanCM('twilight_s',256);
 nColors = size(cmap,1);
 
-%% -------------------------------------------------
+% -------------------------------------------------
 % Determine fixed y limits before animation
-%% -------------------------------------------------
+% -------------------------------------------------
 
 % Maximum possible displacement envelope
 w_amp = abs(W);
@@ -725,9 +725,9 @@ y_limits = [ ...
     -w_max - vertical_padding, ...
      w_max + vertical_padding];
 
-%% -------------------------------------------------
+% -------------------------------------------------
 % Create figure
-%% -------------------------------------------------
+% -------------------------------------------------
 
 fig = figure( ...
     'Position',[100 100 1000 650], ...
@@ -755,7 +755,7 @@ h = plot(x_km, w, ...
 yline(0,'k--', ...
     'HandleVisibility','off');
 
-%% Formatting
+% Formatting
 xlabel('Distance from grounding line (km)');
 ylabel('Vertical displacement (m)');
 
@@ -771,7 +771,7 @@ set(gca, ...
     'FontSize',12, ...
     'LineWidth',1);
 
-%% Colorbar
+% Colorbar
 colormap(gca,cmap);
 clim([0 360]);
 
@@ -786,7 +786,7 @@ cb.TickLabels = { ...
     '270^\circ', ...
     '360^\circ'};
 
-%% Moving phase label
+% Moving phase label
 phase_text = text( ...
     0.03,0.92, ...
     'Phase = 0^\circ', ...
@@ -794,9 +794,9 @@ phase_text = text( ...
     'FontSize',14, ...
     'FontWeight','bold');
 
-%% -------------------------------------------------
+% -------------------------------------------------
 % GIF settings
-%% -------------------------------------------------
+%%-------------------------------------------------
 
 figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/animations';
 
@@ -808,9 +808,9 @@ fname = fullfile(figure_dir,'viscous_phases');
 
 framerate = 25;
 
-%% -------------------------------------------------
+% -------------------------------------------------
 % Animate
-%% -------------------------------------------------
+% -------------------------------------------------
 
 for j = 1:nFrames
 
@@ -851,7 +851,6 @@ for j = 1:nFrames
     end
 
 end
-%%
 
 %% varying the tau_e valeus
 

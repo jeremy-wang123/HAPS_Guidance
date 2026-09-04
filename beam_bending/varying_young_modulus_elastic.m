@@ -1,4 +1,4 @@
-%% Elastic Beam Bending
+%% Elastic Beam Bending varying Young's modulus
 clear; clc;
 %% Parameter values 
 %{
@@ -25,7 +25,7 @@ figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech
 
 % extract key params
 [h_shelf_mean,h_shelf_eff,h_front_mean,h_front_eff] = extract_shelf_thickness('Thwaites Glacier');
-mean_amp = calculate_mean_amp('Thwaites', 'top2');
+mean_amp = calculate_mean_amp('Thwaites', 2);
 
 % parameters 
 rho = 1025; % kg/m^3

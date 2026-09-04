@@ -1,4 +1,4 @@
-%% Variable thickness profiles
+%% Variable thickness profiles with elastic, viscous, maxwell, burgers
 clear;clc;
 
 figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/beam_bending/variable_thickness/PCA_profile/Presentation';

@@ -1,0 +1,63 @@
+# ============================================================
+# MATLAB
+# ============================================================
+
+# MATLAB autosave and backup files
+*.asv
+*.autosave
+*.m~
+
+# MATLAB generated folders
+slprj/
+sccprj/
+codegen/
+
+# MATLAB generated binaries
+*.mex*
+
+# MATLAB crash and log files
+matlab_crash_dump.*
+java.log
+
+# MATLAB temporary files
+*.tmp
+
+
+# ============================================================
+# macOS
+# ============================================================
+
+.DS_Store
+.AppleDouble
+.LSOverride
+
+
+# ============================================================
+# Temporary / Backup Files
+# ============================================================
+
+*.bak
+*.log
+*~
+
+
+# ============================================================
+# Large MATLAB Data Files
+# ============================================================
+# Uncomment the next line if you do NOT want .mat files
+# stored on GitHub.
+
+# *.mat
+
+
+# ============================================================
+# Generated Figures
+# ============================================================
+# Uncomment any of these if you don't want generated figures
+# stored on GitHub.
+
+# *.fig
+# *.png
+# *.jpg
+# *.pdf
+
