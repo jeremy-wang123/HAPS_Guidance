@@ -1,6 +1,8 @@
 %% Use region of interest from beam bending model to draw raster pattern
 
 %% Load Coordinate points
+addpath('/Users/jeremywang/Documents/GitHub/HAPS_Guidance/beam_bending')
+addpath('/Users/jeremywang/Documents/MATLAB/BedMachine')
 load('settling_results.mat');
 
 grid_spacing_km = 1;
@@ -158,7 +160,7 @@ ylim([min(y_valid) - padding, ...
 %% Create grid tiles in the PCA strike direction and normal direction
 
 % tile resolution
-tile_resolution = S_range; 
+tile_resolution = 5e3; 
 
 % Make sure strike is normalized
 strike = strike(:) / norm(strike);
@@ -871,9 +873,9 @@ if ~exist(figure_dir, 'dir')
     mkdir(figure_dir);
 end
 
-exportgraphics(gcf, ...
-    fullfile(figure_dir, 'colored_tiles_strike.png'), ...
-    'Resolution', 300);
+% exportgraphics(gcf, ...
+%     fullfile(figure_dir, 'colored_tiles_strike.png'), ...
+%     'Resolution', 300);
 
 % exportgraphics(gcf, ...
 %    fullfile(figure_dir, 'colored_tiles_normal.png'), ...
@@ -1104,6 +1106,276 @@ ylim([min(y_valid) - padding, ...
 %    fullfile(figure_dir, 'normal_battery.png'), ...
 %    'Resolution', 300);
 
+%% Animation
+
+% ============================================================
+%  ANIMATE FLIGHT + POWER
+% ============================================================
+
+figure;
+
+t = tiledlayout(4,1, ...
+    'TileSpacing','compact', ...
+    'Padding','compact');
+
+% ============================================================
+% TOP PANEL: FLIGHT PATH
+% ============================================================
+
+% Map gets 3/4 of the figure
+ax1 = nexttile(t, [3 1]);
+hold(ax1,'on');
+
+% ------------------------------------------------------------
+% Ice shelf background
+% ------------------------------------------------------------
+
+shelf_plot = ones(size(H_shelf_map));
+shelf_plot(~isfinite(H_shelf_map)) = NaN;
+
+h = pcolor(ax1, xgrid, ygrid, shelf_plot);
+shading(ax1,'flat');
+
+gray_color = [0.8 0.8 0.8];
+
+rgb = repmat( ...
+    reshape(gray_color,1,1,3), ...
+    size(shelf_plot,1), ...
+    size(shelf_plot,2), ...
+    1);
+
+set(h,'CData',rgb);
+
+set(h, ...
+    'AlphaData',double(isfinite(H_shelf_map)), ...
+    'FaceAlpha','flat');
+
+
+% ------------------------------------------------------------
+% ROI
+% ------------------------------------------------------------
+
+plot(ax1, roi_1, ...
+    'FaceColor','none', ...
+    'EdgeColor','k', ...
+    'LineWidth',2);
+
+plot(ax1, roi_2, ...
+    'FaceColor','none', ...
+    'EdgeColor','k', ...
+    'LineWidth',2);
+
+
+% ------------------------------------------------------------
+% Tiles
+% ------------------------------------------------------------
+
+for k = 1:length(tiles)
+
+    plot(ax1, tiles(k), ...
+        'FaceColor','none', ...
+        'EdgeColor',[0.7 0.7 0.7], ...
+        'LineWidth',0.5);
+
+end
+
+
+% ------------------------------------------------------------
+% Full planned trajectory
+% ------------------------------------------------------------
+
+plot(ax1, x_path, y_path, ...
+    'k--', ...
+    'LineWidth',1);
+
+
+% ------------------------------------------------------------
+% Trajectory already flown
+% ------------------------------------------------------------
+
+flight_trace = animatedline(ax1, ...
+    'Color','r', ...
+    'LineStyle','-', ...
+    'LineWidth',2);
+
+% ------------------------------------------------------------
+% Moving aircraft dot
+% ------------------------------------------------------------
+
+aircraft_dot = scatter(ax1, ...
+    x_flight(1), ...
+    y_flight(1), ...
+    100, ...
+    'filled', ...
+    'MarkerEdgeColor','k');
+
+
+axis(ax1,'equal');
+
+padding = 30e3;
+
+xlim(ax1,[ ...
+    min(x_valid)-padding, ...
+    max(x_valid)+padding]);
+
+ylim(ax1,[ ...
+    min(y_valid)-padding, ...
+    max(y_valid)+padding]);
+
+xlabel(ax1,'x (m)');
+ylabel(ax1,'y (m)');
+
+title(ax1,'HAPS Flight');
+
+
+% ============================================================
+% BOTTOM PANEL: POWER
+% ============================================================
+
+ax2 = nexttile;
+hold(ax2,'on');
+grid(ax2,'on');
+
+
+% Convert flight time to hours
+time_hr = time_flight/3600;
+
+
+% ------------------------------------------------------------
+% Animated power curves
+% ------------------------------------------------------------
+
+solar_line = animatedline(ax2, ...
+    'color', 'yellow', ...
+    'LineWidth',1.5);
+
+usage_line = animatedline(ax2, ...
+    'Color','red',...
+    'LineWidth',1.5);
+
+net_line = animatedline(ax2, ...
+    'Color', 'blue', ...
+    'LineWidth',2);
+
+
+% Zero-power line
+yline(ax2,0,'k--');
+
+
+% Full axis limits so they do not change during animation
+xlim(ax2,[0 time_hr(end)]);
+
+% All values exactly as they appear on the plot
+P_all = [ ...
+    P_solar_flight(:); ...
+    -P_usage_flight(:); ...
+    P_net_flight(:)];
+
+% Add some padding
+Pmin = min(P_all);
+Pmax = max(P_all);
+
+padding_P = 0.1*(Pmax - Pmin);
+
+ylim(ax2, [ ...
+    Pmin - padding_P, ...
+    Pmax + padding_P]);
+
+
+xlabel(ax2,'Mission time (hr)');
+ylabel(ax2,'Power (W)');
+
+legend(ax2, ...
+    'Solar generation', ...
+    'Aircraft usage', ...
+    'Net power', ...
+    'Location','southeast');
+
+title(ax2,'Instantaneous Power Balance');
+
+% ============================================================
+% SAVE AS GIF
+% ============================================================
+
+figure_dir = '/Users/jeremywang/Library/CloudStorage/GoogleDrive-jcwang2@caltech.edu/My Drive/HAPS_Guidance/Figures/raster_pattern/20km';
+
+gif_file = fullfile(figure_dir, 'flight_power_animation.gif');
+
+
+% Delay between GIF frames [seconds]
+gif_delay = 0.0005;
+
+% ============================================================
+% ANIMATION LOOP
+% ============================================================
+
+% Show every simulation point
+frame_skip = 15;
+
+for k = 1:frame_skip:length(time_flight)
+
+    % Update flight trace
+    addpoints( ...
+        flight_trace, ...
+        x_flight(k), ...
+        y_flight(k));
+
+    % Update aircraft position
+    aircraft_dot.XData = x_flight(k);
+    aircraft_dot.YData = y_flight(k);
+
+    % Update power curves
+    addpoints( ...
+        solar_line, ...
+        time_hr(k), ...
+        P_solar_flight(k));
+
+    addpoints( ...
+        usage_line, ...
+        time_hr(k), ...
+        -P_usage_flight(k));
+
+    addpoints( ...
+        net_line, ...
+        time_hr(k), ...
+        P_net_flight(k));
+
+    % Update title
+    title(ax1, sprintf( ...
+        'HAPS Flight — Mission Time %.2f hr', ...
+        time_hr(k)));
+
+    % Render current frame
+    drawnow;
+
+    % =========================================================
+    % SAVE FRAME TO GIF
+    % =========================================================
+
+    frame = getframe(gcf);
+    img = frame2im(frame);
+
+    [A,map] = rgb2ind(img,256);
+
+    if k == 1
+
+        % Create GIF
+        imwrite(A,map,gif_file,'gif', ...
+            'LoopCount',Inf, ...
+            'DelayTime',gif_delay);
+
+    else
+
+        % Append frame
+        imwrite(A,map,gif_file,'gif', ...
+            'WriteMode','append', ...
+            'DelayTime',gif_delay);
+
+    end
+
+end
+
+fprintf('GIF saved to:\n%s\n', gif_file);
 %% Function for calculating solar flux 
 function [P_solar, Id, Is, zeta, solar_az] = calculate_solar_power(lat, lon, time_num)
 % CALCULATE_SOLAR_POWER Calculate solar power available to HAPS
