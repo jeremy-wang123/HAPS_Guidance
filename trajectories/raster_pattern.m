@@ -880,6 +880,71 @@ end
 % exportgraphics(gcf, ...
 %    fullfile(figure_dir, 'colored_tiles_normal.png'), ...
 %    'Resolution', 300);
+
+%% Plotting just the ROI
+figure;
+hold on;
+
+% Shelf background
+
+shelf_plot = ones(size(H_shelf_map));
+shelf_plot(~isfinite(H_shelf_map)) = NaN;
+
+h = pcolor(xgrid, ygrid, shelf_plot);
+shading flat;
+
+gray_color = [0.8 0.8 0.8];
+
+rgb = repmat( ...
+    reshape(gray_color,1,1,3), ...
+    size(shelf_plot,1), ...
+    size(shelf_plot,2), ...
+    1);
+
+set(h,'CData',rgb);
+
+set(h, ...
+    'AlphaData',double(isfinite(H_shelf_map)), ...
+    'FaceAlpha','flat');
+
+
+% ROI outlines
+
+plot(roi_1, ...
+    'FaceColor','none', ...
+    'EdgeColor','k', ...
+    'LineWidth',2);
+
+plot(roi_2, ...
+    'FaceColor','none', ...
+    'EdgeColor','k', ...
+    'LineWidth',2);
+
+
+axis equal;
+
+xlabel('x (m)');
+ylabel('y (m)');
+
+padding = 30e3;   % [m]
+
+xlim([ ...
+    min(x_valid)-padding, ...
+    max(x_valid)+padding]);
+
+ylim([ ...
+    min(y_valid)-padding, ...
+    max(y_valid)+padding]);
+
+save_dir = '/Users/jeremywang/Documents/GitHub/HAPS_Guidance/optimization';
+% Full file path
+save_path = fullfile(save_dir, 'ROI2.mat');
+
+% Save variables
+save(save_path, ...
+    'roi_2', ...
+    'strike', ...
+    'normal');
 %% Battery simulation along flight path
 battery_capacity = 27.2;      % kWh
 E_initial = battery_capacity; % start fully charged
